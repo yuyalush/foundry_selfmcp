@@ -110,9 +110,8 @@ def execute_query(
 
         # TOP 句で最大行数を制限 (SQL インジェクション防止のためパラメータは使わない)
         # max_rows は整数であることを検証済み
-        if max_rows:
+        if max_rows and "SELECT" in sql.upper():
             sql = _inject_top_clause(sql, max_rows)
-
         cursor.execute(sql, params)
         columns = [desc[0] for desc in cursor.description]
         rows = cursor.fetchall()
