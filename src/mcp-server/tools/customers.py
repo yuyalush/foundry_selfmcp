@@ -10,40 +10,76 @@ from typing import Optional
 
 from fastmcp import FastMCP
 
-from ..db.connection import execute_query
+try:
+    from ..db.connection import execute_query
+except ImportError:
+    from db.connection import execute_query
 
 logger = logging.getLogger(__name__)
 
 
 def _mask_email(email: str | None) -> str | None:
-    """メールアドレスをマスキングする"""
-    if not email:
+    """メールアドレスをマスキングする（ローカルパートの最初の1文字のみ残す）"""
+    if email is None:
         return None
-    return re.sub(r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}", "***@***.***", email)
+    if not email:
+        return email
+    match = re.match(r"([a-zA-Z0-9._%+\-]+)(@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})", email)
+    if not match:
+        return "***@***.***"
+    local, domain = match.group(1), match.group(2)
+    masked_local = local[0] + "*****" if local else "*****"
+    return masked_local + domain
 
 
 def _mask_phone(phone: str | None) -> str | None:
-    """電話番号の下4桁をマスキングする"""
+    """電話番号の先頭桁をマスキングし、最後の4桁を残す"""
     if not phone:
         return None
-    return re.sub(r"\d{4}$", "****", phone)
+    digits = re.findall(r"\d", phone)
+    if len(digits) <= 4:
+        return phone
+    mask_count = len(digits) - 4
+    result = list(phone)
+    masked = 0
+    for i, c in enumerate(result):
+        if c.isdigit() and masked < mask_count:
+            result[i] = "*"
+            masked += 1
+    return "".join(result)
 
 
 def _mask_contact_name(name: str | None) -> str | None:
-    """担当者名は姓のみ残してマスキングする"""
+    """担当者名は姓のみ残してマスキングする（スペースなしの場合は先頭1文字を残す）"""
     if not name:
         return None
     parts = name.split()
     if len(parts) >= 2:
         return f"{parts[0]} ***"
+    # スペースなし（例: 山田太郎）の場合は先頭1文字のみ残す
+    if len(name) > 1:
+        return f"{name[0]} ***"
     return "***"
 
 
-def _apply_pii_masking(row: dict) -> dict:
-    """行データの PII フィールドをマスキングする"""
-    masked = dict(row)
+def _apply_pii_masking(rows: list[dict] | dict) -> list[dict] | dict:
+    """
+    行データの PII フィールドをマスキングする。
+
+    Args:
+        rows: マスキング対象の辞書、または辞書のリスト
+
+    Returns:
+        マスキング済みの辞書またはリスト
+    """
+    if isinstance(rows, list):
+        return [_apply_pii_masking(row) for row in rows]
+    masked = dict(rows)
+    # "contact_email" または "email" フィールドをマスク
     if "contact_email" in masked:
         masked["contact_email"] = _mask_email(masked["contact_email"])
+    if "email" in masked:
+        masked["email"] = _mask_email(masked["email"])
     if "phone" in masked:
         masked["phone"] = _mask_phone(masked["phone"])
     if "contact_name" in masked:
@@ -124,7 +160,7 @@ def register_customers_tools(mcp: FastMCP) -> None:
         rows = execute_query(sql, tuple(params_list), max_rows=limit)
 
         # PII マスキング適用
-        masked_rows = [_apply_pii_masking(row) for row in rows]
+        masked_rows = _apply_pii_masking(rows)
 
         return {
             "rows": masked_rows,
