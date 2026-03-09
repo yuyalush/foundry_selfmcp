@@ -36,7 +36,7 @@ def _build_inventory_query(
     Args:
         category: 商品カテゴリ絞り込み
         warehouse_id: 倉庫 ID 絞り込み
-        low_stock_only: 在庫不足商品のみ (quantity_available が 0 またはしきい値以下)
+        low_stock_only: 在庫不足商品のみ
         max_rows: 最大返却行数
         snapshot_date: 在庫スナップショット日付
         product_name_keyword: 商品名キーワード (部分一致)
@@ -76,7 +76,7 @@ def _build_inventory_query(
 
     if low_stock_only:
         where_clauses.append(
-            f"i.quantity_available <= {_LOW_STOCK_THRESHOLD} /* low stock threshold */"
+            f"i.quantity_available <= {{_LOW_STOCK_THRESHOLD}} /* low stock threshold */"
         )
 
     where_clauses.append("p.is_active = 1")
@@ -98,7 +98,7 @@ def _build_inventory_query(
     FROM inventory i
     INNER JOIN products p ON i.product_id = p.product_id
     INNER JOIN warehouses w ON i.warehouse_id = w.warehouse_id
-    WHERE {where_sql}
+    WHERE {{where_sql}}
     ORDER BY p.category, p.product_name, w.warehouse_name
     """
     return sql, params_list
@@ -107,9 +107,6 @@ def _build_inventory_query(
 def _calculate_category_summary(rows: list[dict]) -> dict[str, dict]:
     """
     在庫行データからカテゴリ別サマリーを計算する。
-
-    Args:
-        rows: 在庫クエリ結果の行リスト
 
     Returns:
         カテゴリ名をキーとするサマリー辞書。
@@ -142,20 +139,7 @@ def register_inventory_tools(mcp: FastMCP) -> None:
         include_zero_stock: bool = False,
         limit: int = 100,
     ) -> dict:
-        """
-        在庫データを照会します。倉庫別・カテゴリ別の在庫数量を返します。
-
-        Args:
-            category: 商品カテゴリで絞り込み (例: "電子機器", "消耗品", "家具")
-            warehouse_code: 倉庫コードで絞り込み (例: "WH-TOKYO", "WH-OSAKA")
-            snapshot_date: 照会対象の在庫日付 (YYYY-MM-DD形式)。省略時は最新日付
-            product_name_keyword: 商品名のキーワード検索 (部分一致)
-            include_zero_stock: 在庫ゼロ商品を含めるか (デフォルト: False)
-            limit: 最大返却件数 (デフォルト: 100, 最大: 500)
-
-        Returns:
-            在庫データのリスト。各要素に商品名・カテゴリ・倉庫・在庫数量を含む。
-        """
+        """在庫データを照会します。"""
         start = time.monotonic()
         limit = min(max(1, limit), 500)
 
@@ -171,7 +155,6 @@ def register_inventory_tools(mcp: FastMCP) -> None:
         )
 
         rows = execute_query(sql, tuple(params_list), max_rows=limit)
-
         category_summary = _calculate_category_summary(rows)
 
         return {
@@ -194,17 +177,7 @@ def register_inventory_tools(mcp: FastMCP) -> None:
         product_code: Optional[str] = None,
         months: int = 3,
     ) -> dict:
-        """
-        在庫の時系列推移を照会します（月次比較）。
-
-        Args:
-            category: 商品カテゴリで絞り込み
-            product_code: 商品コードで絞り込み (例: "ELEC-001")
-            months: 遡る月数 (デフォルト: 3, 最大: 12)
-
-        Returns:
-            月次の在庫推移データ
-        """
+        """在庫の時系列推移を照会します（月次比較）。"""
         start = time.monotonic()
         months = min(max(1, months), 12)
 
@@ -230,7 +203,7 @@ def register_inventory_tools(mcp: FastMCP) -> None:
         FROM inventory i
         INNER JOIN products p ON i.product_id = p.product_id
         WHERE i.snapshot_date >= DATEADD(month, -?, (SELECT MAX(snapshot_date) FROM inventory))
-            AND {where_sql}
+            AND {{where_sql}}
         GROUP BY i.snapshot_date, p.category, p.product_name
         ORDER BY i.snapshot_date DESC, p.category, p.product_name
         """
