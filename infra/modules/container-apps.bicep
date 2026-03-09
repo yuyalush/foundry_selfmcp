@@ -163,6 +163,49 @@ resource mcpServerApp 'Microsoft.App/containerApps@2024-03-01' = {
 }
 
 // ──────────────────────────────────────────────
+// Diagnostics - Container Apps Environment → Log Analytics
+// ──────────────────────────────────────────────
+resource caEnvDiagnostics 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
+  scope: caEnv
+  name: 'cae-diagnostics'
+  properties: {
+    workspaceId: logAnalyticsWorkspaceId
+    logs: [
+      {
+        categoryGroup: 'allLogs'
+        enabled: true
+        retentionPolicy: { enabled: false, days: 0 }
+      }
+    ]
+    metrics: [
+      {
+        category: 'AllMetrics'
+        enabled: true
+        retentionPolicy: { enabled: false, days: 0 }
+      }
+    ]
+  }
+}
+
+// ──────────────────────────────────────────────
+// Diagnostics - MCP Server Container App → Log Analytics
+// ──────────────────────────────────────────────
+resource mcpAppDiagnostics 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
+  scope: mcpServerApp
+  name: 'mcp-app-diagnostics'
+  properties: {
+    workspaceId: logAnalyticsWorkspaceId
+    logs: [
+      {
+        categoryGroup: 'allLogs'
+        enabled: true
+        retentionPolicy: { enabled: false, days: 0 }
+      }
+    ]
+  }
+}
+
+// ──────────────────────────────────────────────
 // Outputs
 // ──────────────────────────────────────────────
 output caEnvId string = caEnv.id

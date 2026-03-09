@@ -16,6 +16,9 @@ param privateDnsZoneId string
 @description('Key Vault へのアクセスを許可するマネージド ID のプリンシパル ID 一覧')
 param secretReaderPrincipalIds array = []
 
+@description('Log Analytics ワークスペース ID (診断設定用)')
+param logAnalyticsWorkspaceId string
+
 @description('タグ')
 param tags object = {}
 
@@ -94,6 +97,32 @@ resource peKeyVaultDnsGroup 'Microsoft.Network/privateEndpoints/privateDnsZoneGr
         properties: {
           privateDnsZoneId: privateDnsZoneId
         }
+      }
+    ]
+  }
+}
+
+// ──────────────────────────────────────────────
+// Diagnostics - Key Vault 監査ログ → Log Analytics
+// ──────────────────────────────────────────────
+resource keyVaultDiagnostics 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
+  scope: keyVault
+  name: 'kv-diagnostics'
+  properties: {
+    workspaceId: logAnalyticsWorkspaceId
+    logs: [
+      {
+        // 監査ログ: すべての操作 (アクセス・拒否・管理操作)
+        category: 'AuditEvent'
+        enabled: true
+        retentionPolicy: { enabled: false, days: 0 }
+      }
+    ]
+    metrics: [
+      {
+        category: 'AllMetrics'
+        enabled: true
+        retentionPolicy: { enabled: false, days: 0 }
       }
     ]
   }
