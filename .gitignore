@@ -45,6 +45,8 @@ htmlcov/
 
 # Bicep ビルド成果物
 *.json.bak
+infra/**/*.json
+infra/*.json
 
 # Teams appPackage ビルド成果物
 agents/appPackage/*.zip
