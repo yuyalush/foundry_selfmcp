@@ -28,6 +28,9 @@ param sqlAdminLoginName string
 @description('デプロイするコンテナイメージ')
 param containerImage string = 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest'
 
+@description('アラート通知先メールアドレス (空の場合はアラートルールを作成しない)')
+param alertEmailAddress string = ''
+
 @description('タグ')
 param tags object = {
   environment: environmentName
@@ -44,6 +47,7 @@ module monitoring 'modules/monitoring.bicep' = {
     prefix: prefix
     location: location
     tags: tags
+    alertEmailAddress: alertEmailAddress
   }
 }
 
@@ -84,6 +88,7 @@ module keyvault 'modules/keyvault.bicep' = {
     subnetId: networking.outputs.subnetSharedId
     privateDnsZoneId: networking.outputs.privateDnsZoneKeyVaultId
     secretReaderPrincipalIds: [identity.outputs.identityPrincipalId]
+    logAnalyticsWorkspaceId: monitoring.outputs.logAnalyticsId
     tags: tags
   }
 }
@@ -101,6 +106,7 @@ module sql 'modules/sql.bicep' = {
     readerPrincipalId: identity.outputs.identityPrincipalId
     sqlAdminObjectId: sqlAdminObjectId
     sqlAdminLoginName: sqlAdminLoginName
+    logAnalyticsWorkspaceId: monitoring.outputs.logAnalyticsId
     tags: tags
   }
 }
@@ -194,6 +200,24 @@ module aiFoundry 'modules/ai-foundry.bicep' = {
     acrLoginServer: acr.outputs.acrLoginServer
     mcpServerUrl: apim.outputs.mcpApiUrl
     tags: tags
+  }
+}
+
+// ──────────────────────────────────────────────
+// アラートルール (全リソースデプロイ後に作成)
+// alertEmailAddress が指定された場合のみデプロイ
+// (monitoring モジュールの actionGroupId は alertEmailAddress が非空の場合のみ有効)
+// ──────────────────────────────────────────────
+module alerts 'modules/alerts.bicep' = if (!empty(alertEmailAddress)) {
+  name: 'alerts'
+  params: {
+    prefix: prefix
+    location: location
+    tags: tags
+    actionGroupId: monitoring.outputs.actionGroupId
+    logAnalyticsWorkspaceId: monitoring.outputs.logAnalyticsId
+    appInsightsId: monitoring.outputs.appInsightsId
+    sqlDbId: sql.outputs.sqlDbId
   }
 }
 

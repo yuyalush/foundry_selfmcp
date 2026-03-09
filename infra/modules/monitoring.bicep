@@ -1,11 +1,14 @@
 // ================================================================
-// monitoring.bicep - Log Analytics Workspace + Application Insights
+// monitoring.bicep - Log Analytics Workspace + Application Insights + Action Group
 // ================================================================
 @description('リソース名のプレフィックス')
 param prefix string
 
 @description('デプロイ先リージョン')
 param location string
+
+@description('アラート通知先メールアドレス (空の場合はアクショングループを作成しない)')
+param alertEmailAddress string = ''
 
 @description('タグ')
 param tags object = {}
@@ -47,6 +50,26 @@ resource appInsights 'Microsoft.Insights/components@2020-02-02' = {
 }
 
 // ──────────────────────────────────────────────
+// Action Group - メール通知 (alertEmailAddress が指定された場合のみ作成)
+// ──────────────────────────────────────────────
+resource actionGroup 'Microsoft.Insights/actionGroups@2023-01-01' = if (!empty(alertEmailAddress)) {
+  name: '${prefix}-ag-ops'
+  location: 'global'
+  tags: tags
+  properties: {
+    groupShortName: 'OpsAlert'
+    enabled: true
+    emailReceivers: [
+      {
+        name: 'ops-email'
+        emailAddress: alertEmailAddress
+        useCommonAlertSchema: true
+      }
+    ]
+  }
+}
+
+// ──────────────────────────────────────────────
 // Outputs
 // ──────────────────────────────────────────────
 output logAnalyticsId string = logAnalytics.id
@@ -60,3 +83,4 @@ output appInsightsId string = appInsights.id
 output appInsightsName string = appInsights.name
 output appInsightsConnectionString string = appInsights.properties.ConnectionString
 output appInsightsInstrumentationKey string = appInsights.properties.InstrumentationKey
+output actionGroupId string = !empty(alertEmailAddress) ? actionGroup.id : ''

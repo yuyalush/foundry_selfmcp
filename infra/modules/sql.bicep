@@ -22,6 +22,9 @@ param sqlAdminObjectId string
 @description('Entra ID SQL 管理者のログイン名 (UPN またはグループ名)')
 param sqlAdminLoginName string
 
+@description('Log Analytics ワークスペース ID (診断設定用)')
+param logAnalyticsWorkspaceId string
+
 @description('タグ')
 param tags object = {}
 
@@ -131,6 +134,39 @@ resource sqlReaderRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-0
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', sqlServerReaderRoleId)
     principalId: readerPrincipalId
     principalType: 'ServicePrincipal'
+  }
+}
+
+// ──────────────────────────────────────────────
+// Diagnostics - SQL DB スロークエリ監査ログ → Log Analytics
+// ──────────────────────────────────────────────
+resource sqlDbDiagnostics 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
+  scope: sqlDb
+  name: 'sqldb-diagnostics'
+  properties: {
+    workspaceId: logAnalyticsWorkspaceId
+    logs: [
+      {
+        // クエリ実行統計 (Query Store ランタイム統計 - 長時間クエリの特定に活用)
+        category: 'QueryStoreRuntimeStatistics'
+        enabled: true
+        retentionPolicy: { enabled: false, days: 0 }
+      }
+      {
+        // クエリ待機統計 (Query Store 待機統計 - パフォーマンスボトルネック分析に活用)
+        category: 'QueryStoreWaitStatistics'
+        enabled: true
+        retentionPolicy: { enabled: false, days: 0 }
+      }
+    ]
+    metrics: [
+      {
+        // CPU/DTU 等のメトリクス (SQL CPU アラート用)
+        category: 'AllMetrics'
+        enabled: true
+        retentionPolicy: { enabled: false, days: 0 }
+      }
+    ]
   }
 }
 
