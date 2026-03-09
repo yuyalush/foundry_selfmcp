@@ -32,15 +32,21 @@ hooks:
       # DB スキーマ・サンプルデータ適用 (初回のみ)
       Write-Host "Applying database schema..."
       # アーキテクチャ上 Private Endpoint 経由のためローカルから直接実行不可
-      # Jump Box または GitHub Actions から実行してください
-      Write-Host "SKIP: DB schema must be applied via Jump Box or CI/CD pipeline"
+      # Jump Box または GitHub Actions (Self-hosted Runner) から実行してください:
+      #   sqlcmd -S $env:SQL_SERVER_FQDN -d $env:SQL_DB_NAME \
+      #          --authentication-method=ActiveDirectoryIntegrated \
+      #          -i database/schema.sql
+      Write-Host "SKIP: DB schema must be applied via Jump Box or CI/CD pipeline (see docs/03_deployment_guide.md Step 4)"
 
       # メタデータ (AI Search インデックス) 作成
       Write-Host "Uploading metadata to AI Search..."
-      Set-Location database/metadata
-      # python upload_metadata.py --endpoint $env:AI_SEARCH_ENDPOINT
-      Write-Host "SKIP: Metadata upload must be done after network access is confirmed"
-      Set-Location ../..
+      # Private Endpoint 経由のためローカルから直接実行不可
+      # Jump Box または Private Link 経由でアクセス可能な環境から以下を実行:
+      #   python database/metadata/upload_metadata.py \
+      #     --endpoint $env:AZURE_AI_SEARCH_ENDPOINT \
+      #     --index-name metadata-index \
+      #     --dict-path database/metadata/data_dictionary.json
+      Write-Host "SKIP: Metadata upload must be done after network access is confirmed (see docs/03_deployment_guide.md Step 6)"
     continueOnError: true
 
   predeploy:
@@ -51,3 +57,20 @@ hooks:
       docker build -t mcp-server-test src/mcp-server
       docker rmi mcp-server-test
     continueOnError: false
+
+  postdeploy:
+    shell: pwsh
+    run: |
+      Write-Host "Running smoke tests..."
+      $rg = $env:AZURE_RESOURCE_GROUP
+      $envName = $env:AZURE_ENV_NAME
+      if ([string]::IsNullOrEmpty($rg)) {
+        Write-Host "AZURE_RESOURCE_GROUP is not set; skipping smoke test"
+        exit 0
+      }
+      if ([string]::IsNullOrEmpty($envName)) {
+        $envName = 'dev'
+      }
+      ./scripts/smoke_test.ps1 -ResourceGroupName $rg -EnvironmentName $envName
+    continueOnError: true
+

@@ -20,9 +20,12 @@ param logAnalyticsWorkspaceKey string
 @description('デプロイするコンテナイメージ (例: myacr.azurecr.io/mcp-server:latest)')
 param containerImage string
 
-@description('Application Insights 接続文字列')
+@description('Application Insights 接続文字列 (keyVaultUri が空の場合に直接値として使用)')
 @secure()
-param appInsightsConnectionString string
+param appInsightsConnectionString string = ''
+
+@description('Key Vault の URI (指定時は appinsights-connection-string シークレットを KV 参照する。keyVaultUri と appInsightsConnectionString のいずれか一方を必ず指定すること)')
+param keyVaultUri string = ''
 
 @description('SQL Server FQDN')
 param sqlServerFqdn string
@@ -91,7 +94,12 @@ resource mcpServerApp 'Microsoft.App/containerApps@2024-03-01' = {
         enabled: false
       }
       secrets: [
-        {
+        // Key Vault URI が指定されている場合は KV 参照、それ以外は直接値を使用
+        !empty(keyVaultUri) ? {
+          name: 'appinsights-connection-string'
+          keyVaultUrl: '${keyVaultUri}secrets/appinsights-connection-string'
+          identity: identityId
+        } : {
           name: 'appinsights-connection-string'
           value: appInsightsConnectionString
         }

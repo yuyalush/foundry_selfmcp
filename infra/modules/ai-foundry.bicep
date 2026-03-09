@@ -260,6 +260,7 @@ output gpt4oDeploymentName string = gpt4oDeployment.name
 output embeddingDeploymentName string = embeddingDeployment.name
 output foundryHubId string = foundryHub.id
 output foundryHubName string = foundryHub.name
+output foundryHubPrincipalId string = foundryHub.identity.principalId
 output foundryProjectId string = foundryProject.id
 output foundryProjectName string = foundryProject.name
 output foundryProjectPrincipalId string = foundryProject.identity.principalId
