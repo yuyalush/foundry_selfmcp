@@ -18,14 +18,12 @@ _token_cache: dict = {"token": None, "expires_on": 0}
 
 SQL_COPT_SS_ACCESS_TOKEN = 1256  # pyodbc SQL Server 固有の属性
 
-
 def _get_credential() -> DefaultAzureCredential:
     """DefaultAzureCredential のシングルトンを返す"""
     global _credential
     if _credential is None:
         _credential = DefaultAzureCredential()
     return _credential
-
 
 def _get_access_token() -> bytes:
     """
@@ -48,7 +46,6 @@ def _get_access_token() -> bytes:
 
     return token_struct
 
-
 def _inject_top_clause(sql: str, max_rows: int) -> str:
     """
     SELECT 文に TOP 句を挿入する。既に TOP 句がある場合は変更しない。
@@ -64,7 +61,6 @@ def _inject_top_clause(sql: str, max_rows: int) -> str:
     if "SELECT" in sql_upper and "TOP" not in sql_upper:
         sql = sql.replace("SELECT ", f"SELECT TOP {int(max_rows)} ", 1)
     return sql
-
 
 def get_connection() -> pyodbc.Connection:
     """
@@ -88,7 +84,6 @@ def get_connection() -> pyodbc.Connection:
     conn.autocommit = True  # 読み取り専用のため自動コミット
 
     return conn
-
 
 def execute_query(
     sql: str,
@@ -115,8 +110,9 @@ def execute_query(
 
         # TOP 句で最大行数を制限 (SQL インジェクション防止のためパラメータは使わない)
         # max_rows は整数であることを検証済み
-        if max_rows and "SELECT" in sql.upper():
+        if max_rows:
             sql = _inject_top_clause(sql, max_rows)
+
         cursor.execute(sql, params)
         columns = [desc[0] for desc in cursor.description]
         rows = cursor.fetchall()
