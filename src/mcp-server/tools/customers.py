@@ -155,7 +155,6 @@ def register_customers_tools(mcp: FastMCP) -> None:
 
         rows = execute_query(sql, tuple(params_list), max_rows=limit)
 
-        # PII マスキング適用
         masked_rows = _apply_pii_masking(rows)
 
         return {
