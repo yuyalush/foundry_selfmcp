@@ -49,6 +49,23 @@ def _get_access_token() -> bytes:
     return token_struct
 
 
+def _inject_top_clause(sql: str, max_rows: int) -> str:
+    """
+    SELECT 文に TOP 句を挿入する。既に TOP 句がある場合は変更しない。
+
+    Args:
+        sql: 元の SQL クエリ
+        max_rows: TOP に指定する最大行数 (正の整数)
+
+    Returns:
+        TOP 句が挿入された SQL 文字列
+    """
+    sql_upper = sql.upper()
+    if "SELECT" in sql_upper and "TOP" not in sql_upper:
+        sql = sql.replace("SELECT ", f"SELECT TOP {int(max_rows)} ", 1)
+    return sql
+
+
 def get_connection() -> pyodbc.Connection:
     """
     Azure SQL Database への接続を確立して返す。
@@ -98,9 +115,8 @@ def execute_query(
 
         # TOP 句で最大行数を制限 (SQL インジェクション防止のためパラメータは使わない)
         # max_rows は整数であることを検証済み
-        if max_rows and "SELECT" in sql.upper() and "TOP" not in sql.upper():
-            sql = sql.replace("SELECT ", f"SELECT TOP {int(max_rows)} ", 1)
-
+        if max_rows and "SELECT" in sql.upper():
+            sql = _inject_top_clause(sql, max_rows)
         cursor.execute(sql, params)
         columns = [desc[0] for desc in cursor.description]
         rows = cursor.fetchall()

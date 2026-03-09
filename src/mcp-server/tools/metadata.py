@@ -18,14 +18,49 @@ _DICT_PATH = Path(__file__).parents[3] / "database" / "metadata" / "data_diction
 _LOCAL_DICT: dict | None = None
 
 
+def _load_local_metadata(path: str) -> dict | None:
+    """
+    指定パスの JSON ファイルからメタデータを読み込む。
+
+    Args:
+        path: data_dictionary.json ファイルのパス
+
+    Returns:
+        メタデータ辞書。読み込み失敗時は None。
+    """
+    try:
+        with open(path, encoding="utf-8") as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return None
+
+
+def _build_summary(data: dict, table_name: str | None) -> dict:
+    """
+    メタデータ辞書からテーブルサマリーを構築する。
+
+    Args:
+        data: data_dictionary.json の内容
+        table_name: 絞り込むテーブル名。None の場合は全テーブル。
+
+    Returns:
+        テーブル名をキーとするサマリー辞書。
+    """
+    tables = data.get("tables", [])
+    if table_name:
+        # Support both "table_name" key (test fixtures) and "name" key (production data_dictionary.json)
+        tables = [
+            t for t in tables
+            if t.get("table_name") == table_name or t.get("name") == table_name
+        ]
+    return {t.get("table_name", t.get("name", "")): t for t in tables}
+
+
 def _load_local_dict() -> dict:
     global _LOCAL_DICT
     if _LOCAL_DICT is None:
-        try:
-            with open(_DICT_PATH, encoding="utf-8") as f:
-                _LOCAL_DICT = json.load(f)
-        except FileNotFoundError:
-            _LOCAL_DICT = {}
+        loaded = _load_local_metadata(str(_DICT_PATH))
+        _LOCAL_DICT = loaded if loaded is not None else {}
     return _LOCAL_DICT
 
 
@@ -99,20 +134,22 @@ def register_metadata_tools(mcp: FastMCP) -> None:
         if not data_dict:
             return {"error": "Metadata not available", "tables": []}
 
+        summary = _build_summary(data_dict, table_name)
+
         if table_name:
-            tables = [t for t in data_dict.get("tables", []) if t["name"] == table_name]
+            tables = list(summary.values())
         else:
             # 全テーブルの概要のみ返す（重量な完全定義は除く）
             tables = [
                 {
-                    "name": t["name"],
-                    "display_name": t["display_name"],
-                    "description": t["description"],
-                    "business_context": t["business_context"],
+                    "name": t.get("name", t.get("table_name", "")),
+                    "display_name": t.get("display_name", ""),
+                    "description": t.get("description", ""),
+                    "business_context": t.get("business_context", ""),
                     "relationships": t.get("relationships", []),
                     "common_queries": t.get("common_queries", []),
                 }
-                for t in data_dict.get("tables", [])
+                for t in summary.values()
             ]
 
         return {
