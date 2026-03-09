@@ -1,0 +1,187 @@
+{
+  "version": "1.0",
+  "created_at": "2026-03-09",
+  "description": "PoC 業務データベースのデータディクショナリ。テーブル定義・カラム説明・ビジネスコンテキスト・テーブル間の関係性を定義する。",
+  "business_domain": "在庫管理・顧客管理・注文管理",
+  "tables": [
+    {
+      "name": "products",
+      "display_name": "商品マスタ",
+      "description": "在庫管理・注文処理で使用するすべての商品情報を管理するマスタテーブル。",
+      "business_context": "商品マスタは商品部門が管理する。新製品は毎月初に追加され、廃盤商品は is_active=0 で論理削除される。価格は四半期ごとに見直しが行われる。",
+      "row_count_estimate": "50-500件",
+      "update_frequency": "月次",
+      "columns": [
+        { "name": "product_id", "type": "INT", "nullable": false, "description": "商品の一意識別子（自動採番）", "is_primary_key": true, "is_pii": false },
+        { "name": "product_code", "type": "NVARCHAR(50)", "nullable": false, "description": "商品コード。カテゴリ略称+連番の形式（例: ELEC-001）", "is_pii": false, "notes": "カテゴリ略称: ELEC=電子機器, FURN=家具, CONS=消耗品, NETW=ネットワーク, SOFT=ソフトウェア, MISC=その他" },
+        { "name": "product_name", "type": "NVARCHAR(200)", "nullable": false, "description": "商品名。日本語で記載", "is_pii": false },
+        { "name": "category", "type": "NVARCHAR(100)", "nullable": false, "description": "商品カテゴリ。現在の区分: 電子機器/家具/消耗品/ネットワーク/ソフトウェア/その他", "is_pii": false },
+        { "name": "unit_price", "type": "DECIMAL(12,2)", "nullable": false, "description": "税抜き単価（円）", "is_pii": false },
+        { "name": "unit", "type": "NVARCHAR(20)", "nullable": false, "description": "販売単位（例: 台, 個, 本, 冊, セット）", "is_pii": false },
+        { "name": "supplier_name", "type": "NVARCHAR(200)", "nullable": true, "description": "仕入先業者名", "is_pii": false },
+        { "name": "is_active", "type": "BIT", "nullable": false, "description": "有効フラグ。0=廃盤/取扱終了, 1=有効", "is_pii": false },
+        { "name": "created_at", "type": "DATETIME2(0)", "nullable": false, "description": "レコード作成日時（UTC）", "is_pii": false },
+        { "name": "updated_at", "type": "DATETIME2(0)", "nullable": false, "description": "レコード最終更新日時（UTC）", "is_pii": false }
+      ],
+      "relationships": [
+        { "to_table": "inventory", "type": "one_to_many", "join_key": "product_id", "description": "1商品に対して複数の在庫レコードが存在する（倉庫別・日付別）" },
+        { "to_table": "order_items", "type": "one_to_many", "join_key": "product_id", "description": "1商品が複数の注文明細に出現する" }
+      ],
+      "common_queries": [
+        "カテゴリ別の商品一覧・件数集計",
+        "価格帯での商品検索",
+        "有効商品のみの取得（is_active=1）"
+      ]
+    },
+    {
+      "name": "warehouses",
+      "display_name": "倉庫マスタ",
+      "description": "在庫を管理する物流拠点（倉庫）のマスタテーブル。",
+      "business_context": "全国5拠点の物流センターを管理。各拠点は担当エリアを持ち、近隣の顧客への出荷を担当する。",
+      "row_count_estimate": "5-20件",
+      "update_frequency": "年次（拠点追加・廃止時）",
+      "columns": [
+        { "name": "warehouse_id", "type": "INT", "nullable": false, "description": "倉庫の一意識別子", "is_primary_key": true, "is_pii": false },
+        { "name": "warehouse_code", "type": "NVARCHAR(20)", "nullable": false, "description": "倉庫コード（例: WH-TOKYO）", "is_pii": false },
+        { "name": "warehouse_name", "type": "NVARCHAR(200)", "nullable": false, "description": "倉庫名称", "is_pii": false },
+        { "name": "location", "type": "NVARCHAR(200)", "nullable": false, "description": "所在地（都道府県・市区町村）", "is_pii": false },
+        { "name": "is_active", "type": "BIT", "nullable": false, "description": "稼働フラグ", "is_pii": false }
+      ],
+      "relationships": [
+        { "to_table": "inventory", "type": "one_to_many", "join_key": "warehouse_id", "description": "1倉庫が複数商品の在庫を保持" }
+      ]
+    },
+    {
+      "name": "inventory",
+      "display_name": "在庫",
+      "description": "商品ごと・倉庫ごとの在庫数を日次スナップショットとして管理するトランザクションテーブル。",
+      "business_context": "在庫は毎日夜間バッチで更新される日次スナップショット形式。quantity_available（利用可能在庫）は quantity_on_hand - quantity_reserved の計算列。在庫照会は最新の snapshot_date のレコードを参照する。",
+      "row_count_estimate": "10万-100万件（日次蓄積）",
+      "update_frequency": "日次バッチ更新",
+      "columns": [
+        { "name": "inventory_id", "type": "INT", "nullable": false, "description": "在庫レコードの一意識別子", "is_primary_key": true, "is_pii": false },
+        { "name": "product_id", "type": "INT", "nullable": false, "description": "商品ID（products テーブルへの外部キー）", "is_pii": false },
+        { "name": "warehouse_id", "type": "INT", "nullable": false, "description": "倉庫ID（warehouses テーブルへの外部キー）", "is_pii": false },
+        { "name": "snapshot_date", "type": "DATE", "nullable": false, "description": "在庫スナップショット日付（各月の月初日）", "is_pii": false, "notes": "最新の在庫を取得するには MAX(snapshot_date) で絞り込む" },
+        { "name": "quantity_on_hand", "type": "INT", "nullable": false, "description": "実際の保有在庫数", "is_pii": false },
+        { "name": "quantity_reserved", "type": "INT", "nullable": false, "description": "注文済みで引当済みの数量", "is_pii": false },
+        { "name": "quantity_available", "type": "INT（計算列）", "nullable": false, "description": "実際に出荷可能な在庫数 = quantity_on_hand - quantity_reserved", "is_pii": false, "notes": "PERSISTED 計算列のため直接クエリ可能" }
+      ],
+      "relationships": [
+        { "to_table": "products", "type": "many_to_one", "join_key": "product_id", "description": "N在庫レコードが1商品に対応" },
+        { "to_table": "warehouses", "type": "many_to_one", "join_key": "warehouse_id", "description": "N在庫レコードが1倉庫に対応" }
+      ],
+      "common_queries": [
+        "最新在庫の取得: product_id と MAX(snapshot_date) で絞り込み",
+        "カテゴリ別在庫集計: products JOIN inventory で category ごとに SUM",
+        "前月比較: 2つの snapshot_date のレコードを比較",
+        "倉庫別在庫サマリー: warehouse_id ごとに集計"
+      ],
+      "important_notes": "在庫照会時は必ず snapshot_date の最新値で絞り込むこと。全期間のデータを集計すると正しい現在庫が得られない。"
+    },
+    {
+      "name": "customers",
+      "display_name": "顧客",
+      "description": "取引先企業の情報を管理するマスタテーブル。",
+      "business_context": "顧客は法人のみで個人顧客は対象外。担当営業（sales_rep_name）が割り当てられており、信用限度額（credit_limit）の範囲内で掛け売りが可能。contact_name・contact_email・phone は PII（個人情報）としてマスキング対象。",
+      "row_count_estimate": "100-1000件",
+      "update_frequency": "随時（営業部門が管理）",
+      "pii_fields": ["contact_name", "contact_email", "phone"],
+      "columns": [
+        { "name": "customer_id", "type": "INT", "nullable": false, "description": "顧客の一意識別子", "is_primary_key": true, "is_pii": false },
+        { "name": "customer_code", "type": "NVARCHAR(20)", "nullable": false, "description": "顧客コード（例: C-0001）", "is_pii": false },
+        { "name": "company_name", "type": "NVARCHAR(200)", "nullable": false, "description": "取引先企業名", "is_pii": false },
+        { "name": "contact_name", "type": "NVARCHAR(100)", "nullable": true, "description": "担当者氏名", "is_pii": true, "masking_rule": "姓のみ表示（例: 田中 ***）" },
+        { "name": "contact_email", "type": "NVARCHAR(254)", "nullable": true, "description": "担当者メールアドレス", "is_pii": true, "masking_rule": "***@***.*** に置換" },
+        { "name": "phone", "type": "NVARCHAR(20)", "nullable": true, "description": "電話番号", "is_pii": true, "masking_rule": "下4桁を**** に置換" },
+        { "name": "prefecture", "type": "NVARCHAR(10)", "nullable": true, "description": "都道府県", "is_pii": false },
+        { "name": "sales_rep_name", "type": "NVARCHAR(100)", "nullable": true, "description": "担当営業社員名", "is_pii": false },
+        { "name": "credit_limit", "type": "DECIMAL(14,2)", "nullable": false, "description": "信用限度額（円）。この金額を超える掛け売りは要承認", "is_pii": false },
+        { "name": "is_active", "type": "BIT", "nullable": false, "description": "有効フラグ。0=取引停止", "is_pii": false }
+      ],
+      "relationships": [
+        { "to_table": "orders", "type": "one_to_many", "join_key": "customer_id", "description": "1顧客が複数の注文を持つ" }
+      ],
+      "common_queries": [
+        "特定顧客の最新注文状況確認",
+        "担当営業別の顧客リスト・売上集計",
+        "都道府県別の顧客分布",
+        "信用限度額と実績未払残高の比較"
+      ]
+    },
+    {
+      "name": "orders",
+      "display_name": "注文",
+      "description": "顧客からの注文情報を管理するトランザクションテーブル（注文ヘッダー）。",
+      "business_context": "注文ステータスは '受付' → '処理中' → '出荷済' → '完了' の順に遷移する。キャンセルは '受付' または '処理中' のみ可能。total_amount は注文時に確定し、明細の変更があった場合は再計算。",
+      "row_count_estimate": "1万-10万件",
+      "update_frequency": "随時（注文発生・ステータス更新）",
+      "columns": [
+        { "name": "order_id", "type": "INT", "nullable": false, "description": "注文の一意識別子", "is_primary_key": true, "is_pii": false },
+        { "name": "order_number", "type": "NVARCHAR(30)", "nullable": false, "description": "注文番号（例: ORD-2025-0001）。外部に提示する番号", "is_pii": false },
+        { "name": "customer_id", "type": "INT", "nullable": false, "description": "顧客ID", "is_pii": false },
+        { "name": "order_date", "type": "DATE", "nullable": false, "description": "注文受付日", "is_pii": false },
+        { "name": "required_date", "type": "DATE", "nullable": true, "description": "顧客希望納期", "is_pii": false },
+        { "name": "shipped_date", "type": "DATE", "nullable": true, "description": "実際の出荷日。未出荷の場合は NULL", "is_pii": false },
+        { "name": "status", "type": "NVARCHAR(20)", "nullable": false, "description": "注文ステータス: 受付/処理中/出荷済/完了/キャンセル", "is_pii": false },
+        { "name": "total_amount", "type": "DECIMAL(14,2)", "nullable": false, "description": "注文合計金額（税抜き）。明細の line_amount 合計", "is_pii": false },
+        { "name": "notes", "type": "NVARCHAR(500)", "nullable": true, "description": "備考・特記事項", "is_pii": false }
+      ],
+      "relationships": [
+        { "to_table": "customers", "type": "many_to_one", "join_key": "customer_id", "description": "N注文が1顧客に対応" },
+        { "to_table": "order_items", "type": "one_to_many", "join_key": "order_id", "description": "1注文が複数の明細を持つ" }
+      ],
+      "common_queries": [
+        "期間別・顧客別の売上集計",
+        "ステータス別の注文件数・金額",
+        "出荷遅延の確認（required_date < GETDATE() AND shipped_date IS NULL）",
+        "顧客別の注文履歴・累計金額"
+      ]
+    },
+    {
+      "name": "order_items",
+      "display_name": "注文明細",
+      "description": "注文ごとの明細（商品・数量・価格）を管理するトランザクションテーブル。",
+      "business_context": "1注文に対して複数の商品が含まれる場合、明細単位で管理。unit_price は注文時の価格を確定値として保持（商品マスタの価格変更の影響を受けない）。line_amount は計算列。",
+      "row_count_estimate": "5万-50万件",
+      "update_frequency": "注文時のみ（変更不可・キャンセル時は orders.status 変更）",
+      "columns": [
+        { "name": "item_id", "type": "INT", "nullable": false, "description": "明細の一意識別子", "is_primary_key": true, "is_pii": false },
+        { "name": "order_id", "type": "INT", "nullable": false, "description": "注文ID", "is_pii": false },
+        { "name": "line_number", "type": "INT", "nullable": false, "description": "明細行番号（1から採番）", "is_pii": false },
+        { "name": "product_id", "type": "INT", "nullable": false, "description": "商品ID", "is_pii": false },
+        { "name": "quantity", "type": "INT", "nullable": false, "description": "注文数量", "is_pii": false },
+        { "name": "unit_price", "type": "DECIMAL(12,2)", "nullable": false, "description": "注文時の単価（税抜き）。注文確定時に products.unit_price からコピー", "is_pii": false },
+        { "name": "discount_rate", "type": "DECIMAL(5,4)", "nullable": false, "description": "割引率（0.00〜0.50）。0.10 = 10%割引", "is_pii": false },
+        { "name": "line_amount", "type": "DECIMAL(14,2)（計算列）", "nullable": false, "description": "明細金額 = quantity × unit_price × (1 - discount_rate)", "is_pii": false }
+      ],
+      "relationships": [
+        { "to_table": "orders", "type": "many_to_one", "join_key": "order_id", "description": "N明細が1注文に対応" },
+        { "to_table": "products", "type": "many_to_one", "join_key": "product_id", "description": "N明細が1商品に対応" }
+      ],
+      "common_queries": [
+        "注文ごとの明細一覧取得",
+        "商品別の販売数量・金額集計",
+        "カテゴリ別売上分析（orders JOIN order_items JOIN products）"
+      ]
+    }
+  ],
+  "entity_relationships": {
+    "description": "テーブル間の関係性サマリー",
+    "diagram": "products (1) ─── (N) inventory (N) ─── (1) warehouses\nproducts (1) ─── (N) order_items (N) ─── (1) orders (N) ─── (1) customers",
+    "key_joins": [
+      {
+        "description": "カテゴリ別在庫集計",
+        "sql_pattern": "SELECT p.category, SUM(i.quantity_on_hand) FROM inventory i JOIN products p ON i.product_id = p.product_id WHERE i.snapshot_date = (SELECT MAX(snapshot_date) FROM inventory) GROUP BY p.category"
+      },
+      {
+        "description": "顧客別売上集計",
+        "sql_pattern": "SELECT c.company_name, SUM(o.total_amount) FROM orders o JOIN customers c ON o.customer_id = c.customer_id GROUP BY c.company_name ORDER BY SUM(o.total_amount) DESC"
+      },
+      {
+        "description": "商品別販売数量",
+        "sql_pattern": "SELECT p.product_name, SUM(oi.quantity) as total_qty FROM order_items oi JOIN products p ON oi.product_id = p.product_id GROUP BY p.product_name ORDER BY total_qty DESC"
+      }
+    ]
+  }
+}

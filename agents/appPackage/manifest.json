@@ -1,0 +1,35 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/teams/v1.19/MicrosoftTeams.schema.json",
+  "manifestVersion": "1.19",
+  "version": "1.0.0",
+  "id": "{{APP_ID}}",
+  "developer": {
+    "name": "PoC Team",
+    "websiteUrl": "https://github.com/yuyalush/foundry_selfmcp",
+    "privacyUrl": "https://github.com/yuyalush/foundry_selfmcp",
+    "termsOfUseUrl": "https://github.com/yuyalush/foundry_selfmcp"
+  },
+  "name": {
+    "short": "データ照会エージェント",
+    "full": "Azure AI Foundry データ照会エージェント (PoC)"
+  },
+  "description": {
+    "short": "在庫・顧客・注文データを自然言語で照会します",
+    "full": "Azure AI Foundry エージェントと MCP サーバを経由して、在庫・顧客・注文データを自然言語で照会できます。Private Link で保護されたデータベースへ安全にアクセスします。"
+  },
+  "icons": {
+    "color": "color.png",
+    "outline": "outline.png"
+  },
+  "accentColor": "#0078D4",
+  "copilotAgents": {
+    "declarativeAgents": [
+      {
+        "id": "data-inquiry-agent",
+        "file": "declarativeAgent.json"
+      }
+    ]
+  },
+  "permissions": ["identity", "messageTeamMembers"],
+  "validDomains": []
+}

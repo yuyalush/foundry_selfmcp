@@ -1,0 +1,117 @@
+// ================================================================
+// sql.bicep - Azure SQL Database (Serverless) + Private Endpoint
+// ================================================================
+@description('リソース名のプレフィックス')
+param prefix string
+
+@description('デプロイ先リージョン')
+param location string
+
+@description('Private Endpoint 配置先サブネット ID')
+param subnetId string
+
+@description('Private DNS Zone ID (database.windows.net)')
+param privateDnsZoneId string
+
+@description('SQL DB への読み取り専用アクセスを許可するマネージド ID のプリンシパル ID')
+param readerPrincipalId string
+
+@description('Entra ID SQL 管理者のオブジェクト ID')
+param sqlAdminObjectId string
+
+@description('Entra ID SQL 管理者のログイン名 (UPN またはグループ名)')
+param sqlAdminLoginName string
+
+@description('タグ')
+param tags object = {}
+
+// ──────────────────────────────────────────────
+// SQL Server
+// ──────────────────────────────────────────────
+resource sqlServer 'Microsoft.Sql/servers@2023-08-01-preview' = {
+  name: '${prefix}-sql'
+  location: location
+  tags: tags
+  properties: {
+    // SQL 認証を完全に無効化
+    administrators: {
+      administratorType: 'ActiveDirectory'
+      azureADOnlyAuthentication: true
+      login: sqlAdminLoginName
+      sid: sqlAdminObjectId
+      tenantId: tenant().tenantId
+      principalType: 'Group'
+    }
+    minimalTlsVersion: '1.2'
+    publicNetworkAccess: 'Disabled'
+  }
+}
+
+// ──────────────────────────────────────────────
+// SQL Database (Serverless GP, 1-4 vCores)
+// ──────────────────────────────────────────────
+resource sqlDb 'Microsoft.Sql/servers/databases@2023-08-01-preview' = {
+  parent: sqlServer
+  name: '${prefix}-db'
+  location: location
+  tags: tags
+  sku: {
+    name: 'GP_S_Gen5'
+    tier: 'GeneralPurpose'
+    family: 'Gen5'
+    capacity: 1
+  }
+  properties: {
+    collation: 'Japanese_CI_AS'
+    maxSizeBytes: 34359738368 // 32 GB
+    autoPauseDelay: 60         // 60分で自動一時停止
+    minCapacity: '0.5'
+    zoneRedundant: false
+    readScale: 'Disabled'
+  }
+}
+
+// ──────────────────────────────────────────────
+// Private Endpoint
+// ──────────────────────────────────────────────
+resource peSql 'Microsoft.Network/privateEndpoints@2024-01-01' = {
+  name: '${prefix}-pe-sql'
+  location: location
+  tags: tags
+  properties: {
+    subnet: { id: subnetId }
+    privateLinkServiceConnections: [
+      {
+        name: '${prefix}-plsc-sql'
+        properties: {
+          privateLinkServiceId: sqlServer.id
+          groupIds: ['sqlServer']
+        }
+      }
+    ]
+  }
+}
+
+resource peSqlDnsGroup 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2024-01-01' = {
+  parent: peSql
+  name: 'dnsgroupsql'
+  properties: {
+    privateDnsZoneConfigs: [
+      {
+        name: 'database'
+        properties: {
+          privateDnsZoneId: privateDnsZoneId
+        }
+      }
+    ]
+  }
+}
+
+// ──────────────────────────────────────────────
+// Outputs
+// ──────────────────────────────────────────────
+output sqlServerId string = sqlServer.id
+output sqlServerName string = sqlServer.name
+output sqlServerFqdn string = sqlServer.properties.fullyQualifiedDomainName
+output sqlDbId string = sqlDb.id
+output sqlDbName string = sqlDb.name

@@ -1,0 +1,47 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/copilot/plugin/v2.2/schema.json",
+  "schema_version": "v2.2",
+  "name_for_human": "データ照会エージェント",
+  "description_for_human": "在庫・顧客・注文データを照会します",
+  "description_for_model": "Azure AI Foundry のデータ照会エージェントを呼び出します。在庫照会・顧客情報照会・注文照会・売上分析が可能です。",
+  "contact_email": "admin@example.com",
+  "namespace": "dataAgent",
+  "functions": [
+    {
+      "name": "invokeFoundryAgent",
+      "description": "Azure AI Foundry のデータ照会エージェントにメッセージを送信し、応答を取得します",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "ユーザーの質問や指示"
+          }
+        },
+        "required": ["message"]
+      },
+      "returns": {
+        "type": "object",
+        "properties": {
+          "response": {
+            "type": "string",
+            "description": "エージェントからの回答"
+          }
+        }
+      }
+    }
+  ],
+  "runtimes": [
+    {
+      "type": "OpenApi",
+      "auth": {
+        "type": "OAuthPluginVault",
+        "reference_id": "{{OAUTH_REGISTRATION_ID}}"
+      },
+      "spec": {
+        "url": "openapi.json"
+      },
+      "run_for_functions": ["invokeFoundryAgent"]
+    }
+  ]
+}

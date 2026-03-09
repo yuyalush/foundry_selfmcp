@@ -1,0 +1,53 @@
+# Azure Developer CLI 設定
+# azd up で全リソースのプロビジョニング＋デプロイが実行されます
+
+name: foundry-mcp-poc
+metadata:
+  template: foundry-mcp-poc@0.1.0
+
+# インフラ設定
+infra:
+  provider: bicep
+  path: infra
+  module: main
+
+# サービス設定
+services:
+  mcp-server:
+    project: src/mcp-server
+    language: py
+    host: containerapp
+    docker:
+      path: Dockerfile
+      context: .
+    env:
+      # MCP サーバの環境変数は Container Apps 側で注入されるため
+      # ここでは azd 固有の変数のみ定義
+
+# フック - デプロイ前後のカスタム処理
+hooks:
+  postprovision:
+    shell: pwsh
+    run: |
+      # DB スキーマ・サンプルデータ適用 (初回のみ)
+      Write-Host "Applying database schema..."
+      # アーキテクチャ上 Private Endpoint 経由のためローカルから直接実行不可
+      # Jump Box または GitHub Actions から実行してください
+      Write-Host "SKIP: DB schema must be applied via Jump Box or CI/CD pipeline"
+
+      # メタデータ (AI Search インデックス) 作成
+      Write-Host "Uploading metadata to AI Search..."
+      Set-Location database/metadata
+      # python upload_metadata.py --endpoint $env:AI_SEARCH_ENDPOINT
+      Write-Host "SKIP: Metadata upload must be done after network access is confirmed"
+      Set-Location ../..
+    continueOnError: true
+
+  predeploy:
+    shell: pwsh
+    run: |
+      Write-Host "Pre-deploy checks..."
+      # Docker イメージのビルド確認
+      docker build -t mcp-server-test src/mcp-server
+      docker rmi mcp-server-test
+    continueOnError: false

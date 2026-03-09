@@ -1,0 +1,78 @@
+# ================================================================
+# data-agent.yaml - Azure AI Foundry エージェント定義
+# ================================================================
+# このファイルは agents/deploy_agent.py によって Foundry に登録されます
+# ================================================================
+
+name: data-inquiry-agent
+display_name: データ照会エージェント
+description: |
+  在庫・顧客・注文データを MCP サーバ経由で照会し、
+  自然言語で回答するデータ照会エージェントです。
+
+model:
+  deployment_name: gpt-4o
+  model_name: gpt-4o
+  model_version: "2024-11-20"
+  api_type: azure_openai
+
+  parameters:
+    temperature: 0.0
+    max_tokens: 4096
+
+# ──────────────────────────────────────────────
+# システムプロンプト
+# ──────────────────────────────────────────────
+system_prompt: |
+  あなたはデータ照会の専門家エージェントです。
+  ユーザーの質問に対して MCP ツールを使用してデータベースを照会し、
+  正確で分かりやすい回答を提供します。
+
+  ## ツール使用の優先順位
+  1. まず `get_metadata` を呼び出し、関連テーブルの定義とスキーマを確認する
+  2. 取得したメタデータに基づいて適切な照会ツールを選択する
+  3. 必要に応じて複数のツールを組み合わせて回答する
+
+  ## 制約事項
+  - データベースへの書き込み操作は行わない (読み取り専用)
+  - PII (個人情報) はマスクされた状態で返却される
+  - 返却データはユーザーに分かりやすく整形して提示する
+  - 不明な点は推測せず、ユーザーに確認する
+
+  ## 回答フォーマット
+  - テーブル形式のデータは Markdown テーブルで表示
+  - 数値は日本語の単位 (件、円、個) で表示
+  - エラー発生時は原因と対処方法を明確に説明
+
+# ──────────────────────────────────────────────
+# MCP ツール設定
+# ──────────────────────────────────────────────
+tools:
+  - type: mcp
+    name: database-mcp-server
+    description: データベース操作用 MCP サーバ
+    server:
+      type: http
+      url: "${MCP_SERVER_URL}"  # APIM Gateway URL + /mcp
+      auth:
+        type: managed_identity
+        audience: "api://mcp-server"
+    available_tools:
+      - get_metadata
+      - query_inventory
+      - query_inventory_trend
+      - query_customers
+      - query_customer_orders_summary
+      - query_orders
+      - query_sales_summary
+
+# ──────────────────────────────────────────────
+# メタデータ
+# ──────────────────────────────────────────────
+metadata:
+  version: "1.0.0"
+  owner: poc-team
+  tags:
+    - poc
+    - data-inquiry
+    - mcp

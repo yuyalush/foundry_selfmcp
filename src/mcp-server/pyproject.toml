@@ -1,0 +1,34 @@
+[project]
+name = "mcp-server"
+version = "0.1.0"
+description = "MCP Server for Foundry Agent PoC - Azure SQL DB Business Data Access"
+requires-python = ">=3.12"
+
+[project.dependencies]
+fastmcp = ">=2.3.0"
+azure-identity = ">=1.21.0"
+azure-search-documents = ">=11.6.0"
+azure-monitor-opentelemetry = ">=1.6.0"
+opentelemetry-sdk = ">=1.31.0"
+pyodbc = ">=5.2.0"
+pydantic = ">=2.10.0"
+pydantic-settings = ">=2.7.0"
+python-dotenv = ">=1.0.0"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.25.0",
+    "pytest-mock>=3.14.0",
+    "ruff>=0.9.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"

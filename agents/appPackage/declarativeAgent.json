@@ -1,0 +1,28 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/copilot/declarative-agent/v1.4/schema.json",
+  "version": "v1.4",
+  "name": "データ照会エージェント",
+  "description": "在庫・顧客・注文データを Azure AI Foundry エージェント経由で照会します",
+  "instructions": "このエージェントは在庫状況・顧客情報・注文データの照会に特化しています。ユーザーの自然言語での質問を理解し、適切なデータを取得して分かりやすく回答します。個人情報 (PII) は自動的にマスクされます。",
+  "conversation_starters": [
+    {
+      "title": "在庫状況を確認する",
+      "text": "Electronicsカテゴリの在庫状況を教えてください"
+    },
+    {
+      "title": "今月の売上サマリー",
+      "text": "今月（2025年1月）のカテゴリ別売上サマリーを見せてください"
+    },
+    {
+      "title": "在庫切れ商品の確認",
+      "text": "在庫が少なくなっている商品はありますか？"
+    }
+  ],
+  "actions": [
+    {
+      "id": "foundry-data-agent",
+      "type": "AIPlugin",
+      "file": "ai-plugin.json"
+    }
+  ]
+}
