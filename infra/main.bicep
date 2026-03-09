@@ -44,6 +44,8 @@ module networking 'modules/networking.bicep' = {
     prefix: prefix
     location: location
     tags: tags
+    logAnalyticsWorkspaceId: monitoring.outputs.logAnalyticsId
+    logAnalyticsWorkspaceCustomerId: monitoring.outputs.logAnalyticsCustomerId
   }
 }
 
