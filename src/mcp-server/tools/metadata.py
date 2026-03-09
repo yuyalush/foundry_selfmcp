@@ -17,7 +17,6 @@ logger = logging.getLogger(__name__)
 _DICT_PATH = Path(__file__).parents[3] / "database" / "metadata" / "data_dictionary.json"
 _LOCAL_DICT: dict | None = None
 
-
 def _load_local_metadata(path: str) -> dict | None:
     """
     指定パスの JSON ファイルからメタデータを読み込む。
@@ -34,7 +33,6 @@ def _load_local_metadata(path: str) -> dict | None:
     except (FileNotFoundError, json.JSONDecodeError):
         return None
 
-
 def _build_summary(data: dict, table_name: str | None) -> dict:
     """
     メタデータ辞書からテーブルサマリーを構築する。
@@ -47,14 +45,15 @@ def _build_summary(data: dict, table_name: str | None) -> dict:
         テーブル名をキーとするサマリー辞書。
     """
     tables = data.get("tables", [])
-    if table_name:
-        # Support both "table_name" key (test fixtures) and "name" key (production data_dictionary.json)
-        tables = [
-            t for t in tables
-            if t.get("table_name") == table_name or t.get("name") == table_name
-        ]
-    return {t.get("table_name", t.get("name", "")): t for t in tables}
-
+    result = {}
+    for t in tables:
+        # "table_name" キーと "name" キーの両方に対応
+        name = t.get("table_name") or t.get("name", "")
+        if not name:
+            continue
+        if table_name is None or name == table_name:
+            result[name] = t
+    return result
 
 def _load_local_dict() -> dict:
     global _LOCAL_DICT
@@ -62,7 +61,6 @@ def _load_local_dict() -> dict:
         loaded = _load_local_metadata(str(_DICT_PATH))
         _LOCAL_DICT = loaded if loaded is not None else {}
     return _LOCAL_DICT
-
 
 def _search_ai_search(query: str, table_name: str | None) -> list[dict]:
     """Azure AI Search からメタデータを取得する"""
@@ -93,7 +91,6 @@ def _search_ai_search(query: str, table_name: str | None) -> list[dict]:
     except Exception as e:
         logger.warning(f"AI Search unavailable, using local dict: {e}")
         return []
-
 
 def register_metadata_tools(mcp: FastMCP) -> None:
     """メタデータ関連ツールを MCP サーバに登録する"""
