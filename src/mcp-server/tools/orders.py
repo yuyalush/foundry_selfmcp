@@ -1,4 +1,4 @@
-"""
+'"""
 注文照会ツール
 orders + order_items + customers + products のクエリ処理
 """
@@ -129,8 +129,7 @@ def register_orders_tools(mcp: FastMCP) -> None:
         order_number: Optional[str] = None,
         limit: int = 100,
     ) -> dict:
-        """
-        注文データを照会します。
+        """注文データを照会します。
 
         Args:
             customer_code: 顧客コードで絞り込み (例: "C-0001")
@@ -208,8 +207,7 @@ def register_orders_tools(mcp: FastMCP) -> None:
         group_by: str = "customer",
         top_n: int = 10,
     ) -> dict:
-        """
-        売上サマリーを集計します。
+        """売上サマリーを集計します。
 
         Args:
             date_from: 集計開始日 (YYYY-MM-DD)。省略時は当四半期初め
