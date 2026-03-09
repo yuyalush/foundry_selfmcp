@@ -19,7 +19,8 @@ foundry_selfmcp/
 ├── docs/                          # ドキュメント
 │   ├── 01_poc_concept.md         # PoC コンセプト
 │   ├── 02_architecture.md        # アーキテクチャ設計
-│   └── 03_deployment_guide.md    # デプロイガイド
+│   ├── 03_deployment_guide.md    # デプロイガイド
+│   └── 04_m365_copilot_deployment.md  # M365 Copilot Declarative Agent 登録・デプロイ
 ├── infra/                         # Bicep IaC
 │   ├── main.bicep                # エントリポイント
 │   ├── main.bicepparam           # パラメータファイル
@@ -48,7 +49,13 @@ foundry_selfmcp/
 │   └── metadata/
 │       └── data_dictionary.json  # データディクショナリ
 ├── agents/
-│   └── data-agent.yaml          # Foundry エージェント設定
+│   ├── data-agent.yaml          # Foundry エージェント設定
+│   ├── deploy_agent.py          # エージェントデプロイスクリプト
+│   └── appPackage/              # M365 Copilot Declarative Agent パッケージ
+│       ├── manifest.json        # Teams アプリマニフェスト
+│       ├── declarativeAgent.json # Declarative Agent 定義
+│       ├── ai-plugin.json       # AI Plugin 定義
+│       └── openapi.json         # OpenAPI 仕様
 ├── azure.yaml                    # azd 設定
 └── .github/
     └── ISSUE_TEMPLATE/           # Issue テンプレート
@@ -85,6 +92,7 @@ azd up
 | [PoC コンセプト](docs/01_poc_concept.md) | 目的・ユースケース・コンポーネント概要 |
 | [アーキテクチャ設計](docs/02_architecture.md) | 詳細設計・技術スタック・デプロイ順序 |
 | [デプロイガイド](docs/03_deployment_guide.md) | 手順・設定・検証方法 |
+| [M365 Copilot Declarative Agent デプロイ](docs/04_m365_copilot_deployment.md) | M365 Copilot 登録手順・Teams Admin Center デプロイ |
 
 ## 作業 Issues
 

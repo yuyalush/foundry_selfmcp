@@ -1,0 +1,103 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "データ照会エージェント API",
+    "description": "Azure AI Foundry データ照会エージェントを呼び出す OpenAPI 定義。在庫・顧客・注文データの自然言語照会が可能です。",
+    "version": "1.0.0",
+    "contact": {
+      "email": "admin@example.com"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://{{APIM_GATEWAY_URL}}/foundry-agent",
+      "description": "Azure API Management ゲートウェイ"
+    }
+  ],
+  "paths": {
+    "/invoke": {
+      "post": {
+        "operationId": "invokeFoundryAgent",
+        "summary": "Foundry エージェントを呼び出す",
+        "description": "Azure AI Foundry のデータ照会エージェントにメッセージを送信し、応答を取得します。在庫照会・顧客情報照会・注文照会・売上分析が可能です。",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["message"],
+                "properties": {
+                  "message": {
+                    "type": "string",
+                    "description": "ユーザーの質問や指示",
+                    "example": "Electronicsカテゴリの在庫状況を教えてください"
+                  },
+                  "thread_id": {
+                    "type": "string",
+                    "description": "会話スレッド ID（省略時は新規スレッドを作成）"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "エージェントからの応答",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "response": {
+                      "type": "string",
+                      "description": "エージェントからの回答テキスト"
+                    },
+                    "thread_id": {
+                      "type": "string",
+                      "description": "会話スレッド ID（次回のリクエストで継続利用可能）"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "不正なリクエスト"
+          },
+          "401": {
+            "description": "認証エラー"
+          },
+          "429": {
+            "description": "レート制限超過"
+          },
+          "500": {
+            "description": "サーバーエラー"
+          }
+        },
+        "security": [
+          {
+            "oauth2": ["api://foundry-agent/Agent.Invoke"]
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "oauth2": {
+        "type": "oauth2",
+        "flows": {
+          "authorizationCode": {
+            "authorizationUrl": "https://login.microsoftonline.com/{{TENANT_ID}}/oauth2/v2.0/authorize",
+            "tokenUrl": "https://login.microsoftonline.com/{{TENANT_ID}}/oauth2/v2.0/token",
+            "scopes": {
+              "api://foundry-agent/Agent.Invoke": "Foundry エージェントを呼び出す権限"
+            }
+          }
+        }
+      }
+    }
+  }
+}
