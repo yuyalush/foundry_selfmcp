@@ -33,17 +33,14 @@ param sqlDatabaseName string
 @description('AI Search エンドポイント')
 param aiSearchEndpoint string
 
+@description('MCP Server 用 Managed Identity リソース ID')
+param identityId string
+
+@description('MCP Server 用 Managed Identity クライアント ID')
+param identityClientId string
+
 @description('タグ')
 param tags object = {}
-
-// ──────────────────────────────────────────────
-// Managed Identity (MCP Server 用)
-// ──────────────────────────────────────────────
-resource mcpIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
-  name: '${prefix}-id-mcp'
-  location: location
-  tags: tags
-}
 
 // ──────────────────────────────────────────────
 // Container Apps Environment (VNET 統合)
@@ -74,11 +71,11 @@ resource caEnv 'Microsoft.App/managedEnvironments@2024-03-01' = {
 resource mcpServerApp 'Microsoft.App/containerApps@2024-03-01' = {
   name: '${prefix}-mcp'
   location: location
-  tags: tags
+  tags: union(tags, { 'azd-service-name': 'mcp-server' })
   identity: {
     type: 'UserAssigned'
     userAssignedIdentities: {
-      '${mcpIdentity.id}': {}
+      '${identityId}': {}
     }
   }
   properties: {
@@ -90,10 +87,19 @@ resource mcpServerApp 'Microsoft.App/containerApps@2024-03-01' = {
         transport: 'http'
         allowInsecure: false
       }
+      dapr: {
+        enabled: false
+      }
+      secrets: [
+        {
+          name: 'appinsights-connection-string'
+          value: appInsightsConnectionString
+        }
+      ]
       registries: [
         {
           server: split(containerImage, '/')[0]
-          identity: mcpIdentity.id
+          identity: identityId
         }
       ]
     }
@@ -129,7 +135,7 @@ resource mcpServerApp 'Microsoft.App/containerApps@2024-03-01' = {
             }
             {
               name: 'AZURE_CLIENT_ID'
-              value: mcpIdentity.properties.clientId
+              value: identityClientId
             }
             {
               name: 'PORT'
@@ -139,7 +145,7 @@ resource mcpServerApp 'Microsoft.App/containerApps@2024-03-01' = {
         }
       ]
       scale: {
-        minReplicas: 1
+        minReplicas: 0
         maxReplicas: 3
         rules: [
           {
@@ -159,10 +165,8 @@ resource mcpServerApp 'Microsoft.App/containerApps@2024-03-01' = {
 // ──────────────────────────────────────────────
 // Outputs
 // ──────────────────────────────────────────────
-output mcpIdentityId string = mcpIdentity.id
-output mcpIdentityPrincipalId string = mcpIdentity.properties.principalId
-output mcpIdentityClientId string = mcpIdentity.properties.clientId
 output caEnvId string = caEnv.id
 output mcpAppId string = mcpServerApp.id
 output mcpAppFqdn string = mcpServerApp.properties.configuration.ingress.fqdn
 output mcpInternalUrl string = 'https://${mcpServerApp.properties.configuration.ingress.fqdn}/mcp'
+
