@@ -16,6 +16,10 @@ param privateDnsZoneId string
 @description('Key Vault へのアクセスを許可するマネージド ID のプリンシパル ID 一覧')
 param secretReaderPrincipalIds array = []
 
+@description('Application Insights 接続文字列 (Key Vault にシークレットとして格納)')
+@secure()
+param appInsightsConnectionString string = ''
+
 @description('Log Analytics ワークスペース ID (診断設定用)')
 param logAnalyticsWorkspaceId string
 
@@ -99,6 +103,20 @@ resource peKeyVaultDnsGroup 'Microsoft.Network/privateEndpoints/privateDnsZoneGr
         }
       }
     ]
+  }
+}
+
+// ──────────────────────────────────────────────
+// Secrets - Application Insights 接続文字列
+// ──────────────────────────────────────────────
+resource secretAppInsights 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = if (!empty(appInsightsConnectionString)) {
+  parent: keyVault
+  name: 'appinsights-connection-string'
+  properties: {
+    value: appInsightsConnectionString
+    attributes: {
+      enabled: true
+    }
   }
 }
 

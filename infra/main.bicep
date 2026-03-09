@@ -88,6 +88,7 @@ module keyvault 'modules/keyvault.bicep' = {
     subnetId: networking.outputs.subnetSharedId
     privateDnsZoneId: networking.outputs.privateDnsZoneKeyVaultId
     secretReaderPrincipalIds: [identity.outputs.identityPrincipalId]
+    appInsightsConnectionString: monitoring.outputs.appInsightsConnectionString
     logAnalyticsWorkspaceId: monitoring.outputs.logAnalyticsId
     tags: tags
   }
@@ -154,7 +155,7 @@ module containerApps 'modules/container-apps.bicep' = {
     logAnalyticsWorkspaceId: monitoring.outputs.logAnalyticsId
     logAnalyticsWorkspaceKey: monitoring.outputs.logAnalyticsWorkspaceKey
     containerImage: containerImage
-    appInsightsConnectionString: monitoring.outputs.appInsightsConnectionString
+    keyVaultUri: keyvault.outputs.keyVaultUri
     sqlServerFqdn: sql.outputs.sqlServerFqdn
     sqlDatabaseName: sql.outputs.sqlDbName
     aiSearchEndpoint: aiSearch.outputs.searchEndpoint
@@ -222,6 +223,59 @@ module alerts 'modules/alerts.bicep' = if (!empty(alertEmailAddress)) {
 }
 
 // ──────────────────────────────────────────────
+// Key Vault 追加 RBAC
+// 各サービスの Managed Identity に Secret User / Secrets Officer ロールを付与する
+// (keyvault モジュール内の secretReaderPrincipalIds は MCP Identity のみ。
+//  APIM・AI Foundry は循環依存を避けるため keyvault-rbac モジュール経由で付与する)
+// ──────────────────────────────────────────────
+var kvName = '${prefix}-kv'
+// Key Vault Secrets User (4633458b-17de-408a-b874-0445c86b69e6)
+var kvSecretsUserRoleId = '4633458b-17de-408a-b874-0445c86b69e6'
+// Key Vault Secrets Officer (b86a8fe4-44ce-4948-aee5-eccb2c155cd7)
+// AI Foundry Hub が KV にワークスペースシークレットを書き込む際に必要
+var kvSecretsOfficerRoleId = 'b86a8fe4-44ce-4948-aee5-eccb2c155cd7'
+
+// APIM System Identity → Key Vault Secrets User
+module apimKvRole 'modules/keyvault-rbac.bicep' = {
+  name: 'apim-kv-rbac'
+  params: {
+    keyVaultName: kvName
+    principalId: apim.outputs.apimSystemIdentityPrincipalId
+    roleDefinitionId: kvSecretsUserRoleId
+  }
+}
+
+// AI Foundry Hub System Identity → Key Vault Secrets Officer
+module foundryHubKvRole 'modules/keyvault-rbac.bicep' = {
+  name: 'foundry-hub-kv-rbac'
+  params: {
+    keyVaultName: kvName
+    principalId: aiFoundry.outputs.foundryHubPrincipalId
+    roleDefinitionId: kvSecretsOfficerRoleId
+  }
+}
+
+// AI Foundry Project System Identity → Key Vault Secrets User
+module foundryProjectKvRole 'modules/keyvault-rbac.bicep' = {
+  name: 'foundry-project-kv-rbac'
+  params: {
+    keyVaultName: kvName
+    principalId: aiFoundry.outputs.foundryProjectPrincipalId
+    roleDefinitionId: kvSecretsUserRoleId
+  }
+}
+
+// AI Services System Identity → Key Vault Secrets User
+module aiServicesKvRole 'modules/keyvault-rbac.bicep' = {
+  name: 'ai-services-kv-rbac'
+  params: {
+    keyVaultName: kvName
+    principalId: aiFoundry.outputs.aiServicesPrincipalId
+    roleDefinitionId: kvSecretsUserRoleId
+  }
+}
+
+// ──────────────────────────────────────────────
 // Outputs
 // ──────────────────────────────────────────────
 output vnetId string = networking.outputs.vnetId
@@ -232,6 +286,7 @@ output AZURE_CONTAINER_REGISTRY_ENDPOINT string = acr.outputs.acrLoginServer
 output sqlServerFqdn string = sql.outputs.sqlServerFqdn
 output aiSearchEndpoint string = aiSearch.outputs.searchEndpoint
 output appInsightsConnectionString string = monitoring.outputs.appInsightsConnectionString
+output keyVaultUri string = keyvault.outputs.keyVaultUri
 output foundryProjectName string = aiFoundry.outputs.foundryProjectName
 output aiServicesEndpoint string = aiFoundry.outputs.aiServicesEndpoint
 output gpt4oDeploymentName string = aiFoundry.outputs.gpt4oDeploymentName
