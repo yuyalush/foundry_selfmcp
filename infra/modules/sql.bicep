@@ -108,6 +108,33 @@ resource peSqlDnsGroup 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@
 }
 
 // ──────────────────────────────────────────────
+// Transparent Data Encryption (明示的に有効化)
+// ──────────────────────────────────────────────
+resource tde 'Microsoft.Sql/servers/databases/transparentDataEncryption@2023-08-01-preview' = {
+  parent: sqlDb
+  name: 'current'
+  properties: {
+    state: 'Enabled'
+  }
+}
+
+// ──────────────────────────────────────────────
+// Azure RBAC: SQL Server Reader (ARM レベル)
+// ※ DB レベルの db_datareader ロールは schema.sql の
+//   database/schema.sql にある SQL スクリプトで付与する
+// ──────────────────────────────────────────────
+var sqlServerReaderRoleId = 'acdd72a7-3385-48ef-bd42-f606fba81ae7' // Reader
+resource sqlReaderRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(sqlServer.id, readerPrincipalId, sqlServerReaderRoleId)
+  scope: sqlServer
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', sqlServerReaderRoleId)
+    principalId: readerPrincipalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
+// ──────────────────────────────────────────────
 // Outputs
 // ──────────────────────────────────────────────
 output sqlServerId string = sqlServer.id
