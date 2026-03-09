@@ -36,6 +36,18 @@ param tags object = {
 }
 
 // ──────────────────────────────────────────────
+// 監視
+// ──────────────────────────────────────────────
+module monitoring 'modules/monitoring.bicep' = {
+  name: 'monitoring'
+  params: {
+    prefix: prefix
+    location: location
+    tags: tags
+  }
+}
+
+// ──────────────────────────────────────────────
 // ネットワーク
 // ──────────────────────────────────────────────
 module networking 'modules/networking.bicep' = {
@@ -50,10 +62,10 @@ module networking 'modules/networking.bicep' = {
 }
 
 // ──────────────────────────────────────────────
-// 監視
+// MCP Server 用 Managed Identity (先行作成してサイクルを解消)
 // ──────────────────────────────────────────────
-module monitoring 'modules/monitoring.bicep' = {
-  name: 'monitoring'
+module identity 'modules/identity.bicep' = {
+  name: 'identity'
   params: {
     prefix: prefix
     location: location
@@ -66,13 +78,12 @@ module monitoring 'modules/monitoring.bicep' = {
 // ──────────────────────────────────────────────
 module keyvault 'modules/keyvault.bicep' = {
   name: 'keyvault'
-  dependsOn: [networking]
   params: {
     prefix: prefix
     location: location
     subnetId: networking.outputs.subnetSharedId
     privateDnsZoneId: networking.outputs.privateDnsZoneKeyVaultId
-    secretReaderPrincipalIds: []
+    secretReaderPrincipalIds: [identity.outputs.identityPrincipalId]
     tags: tags
   }
 }
@@ -82,13 +93,12 @@ module keyvault 'modules/keyvault.bicep' = {
 // ──────────────────────────────────────────────
 module sql 'modules/sql.bicep' = {
   name: 'sql'
-  dependsOn: [networking]
   params: {
     prefix: prefix
     location: location
     subnetId: networking.outputs.subnetSqlId
     privateDnsZoneId: networking.outputs.privateDnsZoneSqlId
-    readerPrincipalId: containerApps.outputs.mcpIdentityPrincipalId
+    readerPrincipalId: identity.outputs.identityPrincipalId
     sqlAdminObjectId: sqlAdminObjectId
     sqlAdminLoginName: sqlAdminLoginName
     tags: tags
@@ -100,13 +110,12 @@ module sql 'modules/sql.bicep' = {
 // ──────────────────────────────────────────────
 module aiSearch 'modules/ai-search.bicep' = {
   name: 'ai-search'
-  dependsOn: [networking]
   params: {
     prefix: prefix
     location: location
     subnetId: networking.outputs.subnetSearchId
     privateDnsZoneId: networking.outputs.privateDnsZoneSearchId
-    readerPrincipalIds: [containerApps.outputs.mcpIdentityPrincipalId]
+    readerPrincipalIds: [identity.outputs.identityPrincipalId]
     indexContributorPrincipalIds: []
     tags: tags
   }
@@ -117,13 +126,12 @@ module aiSearch 'modules/ai-search.bicep' = {
 // ──────────────────────────────────────────────
 module acr 'modules/acr.bicep' = {
   name: 'acr'
-  dependsOn: [networking]
   params: {
     prefix: prefix
     location: location
     subnetId: networking.outputs.subnetSharedId
     privateDnsZoneId: networking.outputs.privateDnsZoneAcrId
-    pullPrincipalIds: [containerApps.outputs.mcpIdentityPrincipalId]
+    pullPrincipalIds: [identity.outputs.identityPrincipalId]
     tags: tags
   }
 }
@@ -133,18 +141,19 @@ module acr 'modules/acr.bicep' = {
 // ──────────────────────────────────────────────
 module containerApps 'modules/container-apps.bicep' = {
   name: 'container-apps'
-  dependsOn: [networking, monitoring]
   params: {
     prefix: prefix
     location: location
     subnetId: networking.outputs.subnetContainerAppsId
     logAnalyticsWorkspaceId: monitoring.outputs.logAnalyticsId
-    logAnalyticsWorkspaceKey: listKeys(monitoring.outputs.logAnalyticsId, '2023-09-01').primarySharedKey
+    logAnalyticsWorkspaceKey: monitoring.outputs.logAnalyticsWorkspaceKey
     containerImage: containerImage
     appInsightsConnectionString: monitoring.outputs.appInsightsConnectionString
     sqlServerFqdn: sql.outputs.sqlServerFqdn
     sqlDatabaseName: sql.outputs.sqlDbName
     aiSearchEndpoint: aiSearch.outputs.searchEndpoint
+    identityId: identity.outputs.identityId
+    identityClientId: identity.outputs.identityClientId
     tags: tags
   }
 }
@@ -154,7 +163,6 @@ module containerApps 'modules/container-apps.bicep' = {
 // ──────────────────────────────────────────────
 module apim 'modules/apim.bicep' = {
   name: 'apim'
-  dependsOn: [networking, containerApps]
   params: {
     prefix: prefix
     location: location
@@ -172,7 +180,6 @@ module apim 'modules/apim.bicep' = {
 // ──────────────────────────────────────────────
 module aiFoundry 'modules/ai-foundry.bicep' = {
   name: 'ai-foundry'
-  dependsOn: [networking, keyvault, monitoring]
   params: {
     prefix: prefix
     location: location
@@ -189,30 +196,16 @@ module aiFoundry 'modules/ai-foundry.bicep' = {
 }
 
 // ──────────────────────────────────────────────
-// Key Vault シークレット閲覧者に MCP Identity を追加 (後付けパッチ)
-// ──────────────────────────────────────────────
-module keyvaultPatch 'modules/keyvault.bicep' = {
-  name: 'keyvault-patch'
-  dependsOn: [containerApps]
-  params: {
-    prefix: prefix
-    location: location
-    subnetId: networking.outputs.subnetSharedId
-    privateDnsZoneId: networking.outputs.privateDnsZoneKeyVaultId
-    secretReaderPrincipalIds: [containerApps.outputs.mcpIdentityPrincipalId]
-    tags: tags
-  }
-}
-
-// ──────────────────────────────────────────────
 // Outputs
 // ──────────────────────────────────────────────
 output vnetId string = networking.outputs.vnetId
 output apimGatewayUrl string = apim.outputs.apimGatewayUrl
 output mcpApiUrl string = apim.outputs.mcpApiUrl
 output acrLoginServer string = acr.outputs.acrLoginServer
+output AZURE_CONTAINER_REGISTRY_ENDPOINT string = acr.outputs.acrLoginServer
 output sqlServerFqdn string = sql.outputs.sqlServerFqdn
 output aiSearchEndpoint string = aiSearch.outputs.searchEndpoint
 output appInsightsConnectionString string = monitoring.outputs.appInsightsConnectionString
 output foundryProjectName string = aiFoundry.outputs.foundryProjectName
-output mcpIdentityClientId string = containerApps.outputs.mcpIdentityClientId
+output mcpIdentityClientId string = identity.outputs.identityClientId
+
