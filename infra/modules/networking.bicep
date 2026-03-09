@@ -681,6 +681,7 @@ output privateDnsZoneSqlId string = privateDnsZones[0].id
 output privateDnsZoneSearchId string = privateDnsZones[1].id
 output privateDnsZoneKeyVaultId string = privateDnsZones[2].id
 output privateDnsZoneAcrId string = privateDnsZones[6].id
+output privateDnsZoneCognitiveId string = privateDnsZones[7].id
 output privateDnsZoneOpenAiId string = privateDnsZones[8].id
 
 output bastionName string = bastion.name

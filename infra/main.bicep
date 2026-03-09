@@ -187,7 +187,7 @@ module aiFoundry 'modules/ai-foundry.bicep' = {
     location: location
     subnetId: networking.outputs.subnetFoundryId
     privateDnsZoneOpenAiId: networking.outputs.privateDnsZoneOpenAiId
-    privateDnsZoneCognitiveId: networking.outputs.privateDnsZoneOpenAiId
+    privateDnsZoneCognitiveId: networking.outputs.privateDnsZoneCognitiveId
     logAnalyticsWorkspaceId: monitoring.outputs.logAnalyticsId
     keyVaultId: keyvault.outputs.keyVaultId
     appInsightsId: monitoring.outputs.appInsightsId
@@ -209,5 +209,8 @@ output sqlServerFqdn string = sql.outputs.sqlServerFqdn
 output aiSearchEndpoint string = aiSearch.outputs.searchEndpoint
 output appInsightsConnectionString string = monitoring.outputs.appInsightsConnectionString
 output foundryProjectName string = aiFoundry.outputs.foundryProjectName
+output aiServicesEndpoint string = aiFoundry.outputs.aiServicesEndpoint
+output gpt4oDeploymentName string = aiFoundry.outputs.gpt4oDeploymentName
+output embeddingDeploymentName string = aiFoundry.outputs.embeddingDeploymentName
 output mcpIdentityClientId string = identity.outputs.identityClientId
 

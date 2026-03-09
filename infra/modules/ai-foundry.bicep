@@ -78,6 +78,26 @@ resource gpt4oDeployment 'Microsoft.CognitiveServices/accounts/deployments@2024-
   }
 }
 
+// text-embedding-3-large デプロイ (RAG / AI Search 統合用)
+resource embeddingDeployment 'Microsoft.CognitiveServices/accounts/deployments@2024-10-01' = {
+  parent: aiServices
+  name: 'text-embedding-3-large'
+  dependsOn: [gpt4oDeployment]
+  sku: {
+    name: 'GlobalStandard'
+    capacity: 30 // 30K TPM
+  }
+  properties: {
+    model: {
+      format: 'OpenAI'
+      name: 'text-embedding-3-large'
+      version: '1'
+    }
+    versionUpgradeOption: 'NoAutoUpgrade'
+    raiPolicyName: 'Microsoft.DefaultV2'
+  }
+}
+
 // ──────────────────────────────────────────────
 // AI Foundry Hub
 // ──────────────────────────────────────────────
@@ -97,6 +117,27 @@ resource foundryHub 'Microsoft.MachineLearningServices/workspaces@2024-10-01' = 
     containerRegistry: null
     publicNetworkAccess: 'Disabled'
     storageAccount: null // Hub は Storage 不要
+    managedNetwork: {
+      isolationMode: 'AllowOnlyApprovedOutbound'
+    }
+  }
+}
+
+// ──────────────────────────────────────────────
+// Hub → AI Services 接続 (モデルカタログ連携)
+// ──────────────────────────────────────────────
+resource hubAiServicesConnection 'Microsoft.MachineLearningServices/workspaces/connections@2024-10-01' = {
+  parent: foundryHub
+  name: '${prefix}-aiservices-conn'
+  properties: {
+    category: 'AIServices'
+    target: aiServices.properties.endpoint
+    authType: 'AAD'
+    isSharedToAll: true
+    metadata: {
+      ApiType: 'Azure'
+      ResourceId: aiServices.id
+    }
   }
 }
 
@@ -116,6 +157,7 @@ resource foundryProject 'Microsoft.MachineLearningServices/workspaces@2024-10-01
     description: 'データ照会エージェント用プロジェクト'
     hubResourceId: foundryHub.id
     publicNetworkAccess: 'Disabled'
+    applicationInsights: appInsightsId
   }
 }
 
@@ -162,12 +204,60 @@ resource peAiServicesDnsGroup 'Microsoft.Network/privateEndpoints/privateDnsZone
 }
 
 // ──────────────────────────────────────────────
+// Diagnostic Settings - AI Services → Log Analytics
+// ──────────────────────────────────────────────
+resource aiServicesDiagnostics 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
+  name: 'diag-aiservices'
+  scope: aiServices
+  properties: {
+    workspaceId: logAnalyticsWorkspaceId
+    logs: [
+      {
+        categoryGroup: 'allLogs'
+        enabled: true
+      }
+    ]
+    metrics: [
+      {
+        category: 'AllMetrics'
+        enabled: true
+      }
+    ]
+  }
+}
+
+// ──────────────────────────────────────────────
+// Diagnostic Settings - Foundry Hub → Log Analytics
+// ──────────────────────────────────────────────
+resource foundryHubDiagnostics 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
+  name: 'diag-foundryhub'
+  scope: foundryHub
+  properties: {
+    workspaceId: logAnalyticsWorkspaceId
+    logs: [
+      {
+        categoryGroup: 'allLogs'
+        enabled: true
+      }
+    ]
+    metrics: [
+      {
+        category: 'AllMetrics'
+        enabled: true
+      }
+    ]
+  }
+}
+
+// ──────────────────────────────────────────────
 // Outputs
 // ──────────────────────────────────────────────
 output aiServicesId string = aiServices.id
 output aiServicesName string = aiServices.name
 output aiServicesPrincipalId string = aiServices.identity.principalId
 output aiServicesEndpoint string = aiServices.properties.endpoint
+output gpt4oDeploymentName string = gpt4oDeployment.name
+output embeddingDeploymentName string = embeddingDeployment.name
 output foundryHubId string = foundryHub.id
 output foundryHubName string = foundryHub.name
 output foundryProjectId string = foundryProject.id
