@@ -1,4 +1,4 @@
-"""
+'"""
 注文照会ツール
 orders + order_items + customers + products のクエリ処理
 """
@@ -120,8 +120,7 @@ def register_orders_tools(mcp: FastMCP) -> None:
         order_number: Optional[str] = None,
         limit: int = 100,
     ) -> dict:
-        """
-        注文データを照会します。
+        """注文データを照会します。
 
         Args:
             customer_code: 顧客コードで絞り込み (例: "C-0001")
@@ -138,9 +137,8 @@ def register_orders_tools(mcp: FastMCP) -> None:
         limit = min(max(1, limit), 500)
 
         # ステータスのホワイトリスト検証
-        valid_statuses = {"受付", "処理中", "出荷済", "完了", "キャンセル"}
-        if status and status not in valid_statuses:
-            return {"error": f"Invalid status. Must be one of: {', '.join(valid_statuses)}"}
+        if status and not _validate_status(status):
+            return {"error": f"Invalid status. Must be one of: {', '.join(sorted(_VALID_STATUSES))}"}
 
         where_clauses = []
         params_list: list = []
@@ -200,8 +198,7 @@ def register_orders_tools(mcp: FastMCP) -> None:
         group_by: str = "customer",
         top_n: int = 10,
     ) -> dict:
-        """
-        売上サマリーを集計します。
+        """売上サマリーを集計します。
 
         Args:
             date_from: 集計開始日 (YYYY-MM-DD)。省略時は当四半期初め
@@ -213,72 +210,18 @@ def register_orders_tools(mcp: FastMCP) -> None:
             集計結果のリスト（合計金額降順）
         """
         start = time.monotonic()
-        top_n = min(max(1, top_n), 50)
+        top_n = min(max(1, top_n), _MAX_TOP_N)
 
         # group_by のホワイトリスト検証
-        valid_group_by = {"customer", "category", "month"}
-        if group_by not in valid_group_by:
-            return {"error": f"Invalid group_by. Must be one of: {', '.join(valid_group_by)}"}
+        if not _validate_group_by(group_by):
+            return {"error": f"Invalid group_by. Must be one of: {', '.join(sorted(_VALID_GROUP_BY))}"}
 
-        # 日付範囲の設定（省略時のデフォルト）
-        params_list: list = []
-        date_filter = "o.status != N'キャンセル'"
-
-        if date_from:
-            date_filter += " AND o.order_date >= ?"
-            params_list.append(date_from)
-        else:
-            # デフォルト: 当四半期初め
-            date_filter += " AND o.order_date >= DATEADD(quarter, DATEDIFF(quarter, 0, GETDATE()), 0)"
-
-        if date_to:
-            date_filter += " AND o.order_date <= ?"
-            params_list.append(date_to)
-
-        # group_by に応じたクエリ生成
-        if group_by == "customer":
-            sql = f"""
-            SELECT TOP {top_n}
-                c.company_name,
-                c.customer_code,
-                c.prefecture,
-                c.sales_rep_name,
-                COUNT(DISTINCT o.order_id) AS order_count,
-                SUM(o.total_amount) AS total_amount,
-                MAX(o.order_date) AS latest_order_date
-            FROM orders o
-            INNER JOIN customers c ON o.customer_id = c.customer_id
-            WHERE {date_filter}
-            GROUP BY c.company_name, c.customer_code, c.prefecture, c.sales_rep_name
-            ORDER BY total_amount DESC
-            """
-
-        elif group_by == "category":
-            sql = f"""
-            SELECT TOP {top_n}
-                p.category,
-                COUNT(DISTINCT o.order_id) AS order_count,
-                SUM(oi.quantity) AS total_quantity,
-                SUM(oi.line_amount) AS total_amount
-            FROM orders o
-            INNER JOIN order_items oi ON o.order_id = oi.order_id
-            INNER JOIN products p ON oi.product_id = p.product_id
-            WHERE {date_filter}
-            GROUP BY p.category
-            ORDER BY total_amount DESC
-            """
-
-        else:  # month
-            sql = f"""
-            SELECT TOP {top_n}
-                FORMAT(o.order_date, 'yyyy-MM') AS year_month,
-                COUNT(DISTINCT o.order_id) AS order_count,
-                SUM(o.total_amount) AS total_amount
-            FROM orders o
-            WHERE {date_filter}
-            GROUP BY FORMAT(o.order_date, 'yyyy-MM')
-            ORDER BY year_month DESC
-            """
+        sql, params_list = _build_sales_summary_query(
+            group_by=group_by,
+            start_date=date_from,
+            end_date=date_to,
+            top_n=top_n,
+        )
 
         rows = execute_query(sql, tuple(params_list), max_rows=top_n)
 
