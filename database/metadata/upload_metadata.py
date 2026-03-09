@@ -74,23 +74,28 @@ def build_documents(data_dict: dict) -> list[dict]:
     """data_dictionary.json から検索ドキュメントを構築する"""
     docs = []
     for table in data_dict.get("tables", []):
-        table_name = table.get("table_name", "")
+        # "name" と "table_name" の両方に対応
+        table_name = table.get("name") or table.get("table_name", "")
 
-        # カラム名テキスト
+        # カラム名テキスト (data_dictionary.json のスキーマに対応)
         column_names = [
-            f"{c.get('column_name', '')} ({c.get('display_name', '')}): {c.get('description', '')}"
+            f"{c.get('name', '')} ({c.get('type', '')}): {c.get('description', '')}"
             for c in table.get("columns", [])
         ]
 
-        # よくあるクエリテキスト
-        common_queries = [
-            f"{q.get('description', '')}: {q.get('example_natural_language', '')}"
-            for q in table.get("common_queries", [])
-        ]
+        # よくあるクエリテキスト (文字列リストにも辞書リストにも対応)
+        common_queries_raw = table.get("common_queries", [])
+        if common_queries_raw and isinstance(common_queries_raw[0], dict):
+            common_queries = [
+                f"{q.get('description', '')}: {q.get('sql_pattern', q.get('example_natural_language', ''))}"
+                for q in common_queries_raw
+            ]
+        else:
+            common_queries = [str(q) for q in common_queries_raw]
 
-        # リレーションテキスト
+        # リレーションテキスト (data_dictionary.json のスキーマに対応)
         relationships = [
-            f"{r.get('related_table', '')} - {r.get('description', '')}"
+            f"{r.get('to_table', r.get('related_table', ''))} - {r.get('description', '')}"
             for r in table.get("relationships", [])
         ]
 

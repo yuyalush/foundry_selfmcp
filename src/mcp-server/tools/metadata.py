@@ -29,6 +29,41 @@ def _load_local_dict() -> dict:
     return _LOCAL_DICT
 
 
+def _load_local_metadata(path: str) -> dict:
+    """指定パスからデータディクショナリを読み込む"""
+    with open(path, encoding="utf-8") as f:
+        return json.load(f)
+
+
+def _build_summary(data_dict: dict, table_name: str | None = None) -> dict:
+    """
+    データディクショナリからテーブルサマリーを構築する。
+
+    Args:
+        data_dict: データディクショナリ全体
+        table_name: 絞り込むテーブル名。None の場合は全テーブルを返す
+
+    Returns:
+        テーブル名をキーとするサマリー辞書
+    """
+    tables = data_dict.get("tables", [])
+    result = {}
+    for t in tables:
+        # "table_name" キーと "name" キーの両方に対応
+        name = t.get("table_name") or t.get("name", "")
+        if not name:
+            continue
+        if table_name is None or name == table_name:
+            result[name] = {
+                "display_name": t.get("display_name", ""),
+                "description": t.get("description", ""),
+                "business_context": t.get("business_context", ""),
+                "relationships": t.get("relationships", []),
+                "common_queries": t.get("common_queries", []),
+            }
+    return result
+
+
 def _search_ai_search(query: str, table_name: str | None) -> list[dict]:
     """Azure AI Search からメタデータを取得する"""
     try:
