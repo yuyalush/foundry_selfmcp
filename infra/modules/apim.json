@@ -1,0 +1,338 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.41.2.15936",
+      "templateHash": "13474276230076932250"
+    }
+  },
+  "parameters": {
+    "prefix": {
+      "type": "string",
+      "metadata": {
+        "description": "リソース名のプレフィックス"
+      }
+    },
+    "location": {
+      "type": "string",
+      "metadata": {
+        "description": "デプロイ先リージョン"
+      }
+    },
+    "subnetId": {
+      "type": "string",
+      "metadata": {
+        "description": "APIM が配置されるサブネット ID"
+      }
+    },
+    "publisherEmail": {
+      "type": "string",
+      "metadata": {
+        "description": "APIM Publisher メールアドレス"
+      }
+    },
+    "publisherName": {
+      "type": "string",
+      "metadata": {
+        "description": "APIM Publisher 名"
+      }
+    },
+    "mcpBackendUrl": {
+      "type": "string",
+      "metadata": {
+        "description": "MCP Server の内部 URL (Container Apps FQDN)"
+      }
+    },
+    "mcpBackendAudience": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Managed Identity バックエンド認証用リソース URI (Container Apps Easy Auth の App ID URI)"
+      }
+    },
+    "logAnalyticsWorkspaceId": {
+      "type": "string",
+      "metadata": {
+        "description": "Log Analytics ワークスペース ID"
+      }
+    },
+    "appInsightsId": {
+      "type": "string",
+      "metadata": {
+        "description": "Application Insights リソース ID"
+      }
+    },
+    "appInsightsInstrumentationKey": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Application Insights インストゥルメンテーションキー"
+      }
+    },
+    "tags": {
+      "type": "object",
+      "defaultValue": {},
+      "metadata": {
+        "description": "タグ"
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.ApiManagement/service",
+      "apiVersion": "2023-09-01-preview",
+      "name": "[format('{0}-apim', parameters('prefix'))]",
+      "location": "[parameters('location')]",
+      "tags": "[parameters('tags')]",
+      "sku": {
+        "name": "Premiumv2",
+        "capacity": 1
+      },
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "properties": {
+        "publisherEmail": "[parameters('publisherEmail')]",
+        "publisherName": "[parameters('publisherName')]",
+        "virtualNetworkType": "Internal",
+        "virtualNetworkConfiguration": {
+          "subnetResourceId": "[parameters('subnetId')]"
+        },
+        "customProperties": {
+          "Microsoft.WindowsAzure.ApiManagement.Gateway.Security.Protocols.Tls10": "false",
+          "Microsoft.WindowsAzure.ApiManagement.Gateway.Security.Protocols.Tls11": "false",
+          "Microsoft.WindowsAzure.ApiManagement.Gateway.Security.Backend.Protocols.Tls10": "false",
+          "Microsoft.WindowsAzure.ApiManagement.Gateway.Security.Backend.Protocols.Tls11": "false"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Insights/diagnosticSettings",
+      "apiVersion": "2021-05-01-preview",
+      "scope": "[resourceId('Microsoft.ApiManagement/service', format('{0}-apim', parameters('prefix')))]",
+      "name": "apim-diagnostics",
+      "properties": {
+        "workspaceId": "[parameters('logAnalyticsWorkspaceId')]",
+        "logs": [
+          {
+            "categoryGroup": "allLogs",
+            "enabled": true,
+            "retentionPolicy": {
+              "enabled": false,
+              "days": 0
+            }
+          }
+        ],
+        "metrics": [
+          {
+            "category": "AllMetrics",
+            "enabled": true,
+            "retentionPolicy": {
+              "enabled": false,
+              "days": 0
+            }
+          }
+        ]
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.ApiManagement/service', format('{0}-apim', parameters('prefix')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.ApiManagement/service/namedValues",
+      "apiVersion": "2023-09-01-preview",
+      "name": "[format('{0}/{1}', format('{0}-apim', parameters('prefix')), 'mcp-backend-url')]",
+      "properties": {
+        "displayName": "mcp-backend-url",
+        "value": "[parameters('mcpBackendUrl')]",
+        "secret": false
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.ApiManagement/service', format('{0}-apim', parameters('prefix')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.ApiManagement/service/namedValues",
+      "apiVersion": "2023-09-01-preview",
+      "name": "[format('{0}/{1}', format('{0}-apim', parameters('prefix')), 'tenant-id')]",
+      "properties": {
+        "displayName": "tenant-id",
+        "value": "[tenant().tenantId]",
+        "secret": false
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.ApiManagement/service', format('{0}-apim', parameters('prefix')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.ApiManagement/service/namedValues",
+      "apiVersion": "2023-09-01-preview",
+      "name": "[format('{0}/{1}', format('{0}-apim', parameters('prefix')), 'login-endpoint')]",
+      "properties": {
+        "displayName": "login-endpoint",
+        "value": "[environment().authentication.loginEndpoint]",
+        "secret": false
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.ApiManagement/service', format('{0}-apim', parameters('prefix')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.ApiManagement/service/namedValues",
+      "apiVersion": "2023-09-01-preview",
+      "name": "[format('{0}/{1}', format('{0}-apim', parameters('prefix')), 'mcp-backend-resource')]",
+      "properties": {
+        "displayName": "mcp-backend-resource",
+        "value": "[if(empty(parameters('mcpBackendAudience')), environment().resourceManager, parameters('mcpBackendAudience'))]",
+        "secret": false
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.ApiManagement/service', format('{0}-apim', parameters('prefix')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.ApiManagement/service/backends",
+      "apiVersion": "2023-09-01-preview",
+      "name": "[format('{0}/{1}', format('{0}-apim', parameters('prefix')), 'mcp-server-backend')]",
+      "properties": {
+        "url": "[parameters('mcpBackendUrl')]",
+        "protocol": "http",
+        "tls": {
+          "validateCertificateChain": true,
+          "validateCertificateName": true
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.ApiManagement/service', format('{0}-apim', parameters('prefix')))]",
+        "[resourceId('Microsoft.ApiManagement/service/namedValues', format('{0}-apim', parameters('prefix')), 'mcp-backend-url')]"
+      ]
+    },
+    {
+      "type": "Microsoft.ApiManagement/service/apis",
+      "apiVersion": "2023-09-01-preview",
+      "name": "[format('{0}/{1}', format('{0}-apim', parameters('prefix')), 'mcp-server-api')]",
+      "properties": {
+        "displayName": "MCP Server API",
+        "description": "Azure AI Foundry エージェント用 MCP Server",
+        "path": "mcp/v1",
+        "protocols": [
+          "https"
+        ],
+        "subscriptionRequired": false,
+        "serviceUrl": "[parameters('mcpBackendUrl')]"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.ApiManagement/service', format('{0}-apim', parameters('prefix')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.ApiManagement/service/apis/policies",
+      "apiVersion": "2023-09-01-preview",
+      "name": "[format('{0}/{1}/{2}', format('{0}-apim', parameters('prefix')), 'mcp-server-api', 'policy')]",
+      "properties": {
+        "format": "rawxml",
+        "value": "<policies>\n  <inbound>\n    <base />\n    <!-- Entra ID JWT 検証: Bearer トークンの署名・オーディエンスを検証 -->\n    <validate-jwt header-name=\"Authorization\" failed-validation-httpcode=\"401\" failed-validation-error-message=\"Unauthorized: valid JWT token required\">\n      <openid-config url=\"{{login-endpoint}}{{tenant-id}}/v2.0/.well-known/openid-configuration\" />\n      <audiences>\n        <audience>api://mcp-server</audience>\n      </audiences>\n    </validate-jwt>\n    <!-- レート制限: クライアント ID ごとに 100 req/min -->\n    <rate-limit-by-key calls=\"100\" renewal-period=\"60\"\n      counter-key=\"@(context.Request.Headers.GetValueOrDefault(&quot;x-client-id&quot;, context.Request.IpAddress))\"\n      increment-condition=\"@(context.Response.StatusCode != 429)\" />\n    <!-- リクエストサイズ上限 (1 MB) -->\n    <choose>\n      <when condition=\"@(context.Request.Headers.GetValueOrDefault(&quot;Content-Length&quot;, &quot;0&quot;).AsInteger() > 1048576)\">\n        <return-response>\n          <set-status code=\"413\" reason=\"Payload Too Large\" />\n          <set-header name=\"Content-Type\" exists-action=\"override\">\n            <value>application/json</value>\n          </set-header>\n          <set-body>{\"error\":\"Request payload exceeds the 1 MB limit\"}</set-body>\n        </return-response>\n      </when>\n    </choose>\n    <!-- Managed Identity によるバックエンド認証 (resource は backend の App ID URI に合わせて設定) -->\n    <authentication-managed-identity resource=\"{{mcp-backend-resource}}\" />\n    <!-- バックエンドへの転送 -->\n    <set-backend-service backend-id=\"mcp-server-backend\" />\n  </inbound>\n  <backend>\n    <base />\n  </backend>\n  <outbound>\n    <base />\n    <!-- PII マスキング: メールアドレス -->\n    <find-and-replace from=\"[a-zA-Z0-9._%+\\-]+@[a-zA-Z0-9.\\-]+\\.[a-zA-Z]{2,}\" to=\"***@***.***\" />\n    <!-- PII マスキング: 日本の電話番号 -->\n    <find-and-replace from=\"0[0-9]{1,4}-[0-9]{1,4}-[0-9]{4}\" to=\"***-****-****\" />\n    <!-- セキュリティヘッダー付与 -->\n    <set-header name=\"X-Content-Type-Options\" exists-action=\"override\">\n      <value>nosniff</value>\n    </set-header>\n    <set-header name=\"X-Frame-Options\" exists-action=\"override\">\n      <value>DENY</value>\n    </set-header>\n    <set-header name=\"X-XSS-Protection\" exists-action=\"override\">\n      <value>1; mode=block</value>\n    </set-header>\n  </outbound>\n  <on-error>\n    <base />\n    <set-header name=\"Content-Type\" exists-action=\"override\">\n      <value>application/json</value>\n    </set-header>\n    <set-body>@{\n      return new JObject(\n        new JProperty(\"error\", context.LastError.Message),\n        new JProperty(\"statusCode\", context.Response.StatusCode)\n      ).ToString();\n    }</set-body>\n  </on-error>\n</policies>\n"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.ApiManagement/service/apis', format('{0}-apim', parameters('prefix')), 'mcp-server-api')]",
+        "[resourceId('Microsoft.ApiManagement/service/namedValues', format('{0}-apim', parameters('prefix')), 'login-endpoint')]",
+        "[resourceId('Microsoft.ApiManagement/service/namedValues', format('{0}-apim', parameters('prefix')), 'mcp-backend-resource')]",
+        "[resourceId('Microsoft.ApiManagement/service/namedValues', format('{0}-apim', parameters('prefix')), 'tenant-id')]"
+      ]
+    },
+    {
+      "type": "Microsoft.ApiManagement/service/loggers",
+      "apiVersion": "2023-09-01-preview",
+      "name": "[format('{0}/{1}', format('{0}-apim', parameters('prefix')), 'appinsights-logger')]",
+      "properties": {
+        "loggerType": "applicationInsights",
+        "credentials": {
+          "instrumentationKey": "[parameters('appInsightsInstrumentationKey')]"
+        },
+        "isBuffered": true,
+        "resourceId": "[parameters('appInsightsId')]"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.ApiManagement/service', format('{0}-apim', parameters('prefix')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.ApiManagement/service/apis/diagnostics",
+      "apiVersion": "2023-09-01-preview",
+      "name": "[format('{0}/{1}/{2}', format('{0}-apim', parameters('prefix')), 'mcp-server-api', 'applicationinsights')]",
+      "properties": {
+        "alwaysLog": "allErrors",
+        "loggerId": "[resourceId('Microsoft.ApiManagement/service/loggers', format('{0}-apim', parameters('prefix')), 'appinsights-logger')]",
+        "sampling": {
+          "samplingType": "fixed",
+          "percentage": 100
+        },
+        "frontend": {
+          "request": {
+            "headers": [
+              "x-client-id",
+              "Content-Type"
+            ],
+            "body": {
+              "bytes": 0
+            }
+          },
+          "response": {
+            "headers": [
+              "Content-Type",
+              "X-Content-Type-Options"
+            ],
+            "body": {
+              "bytes": 0
+            }
+          }
+        },
+        "backend": {
+          "request": {
+            "headers": [
+              "Content-Type"
+            ],
+            "body": {
+              "bytes": 0
+            }
+          },
+          "response": {
+            "headers": [
+              "Content-Type"
+            ],
+            "body": {
+              "bytes": 0
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.ApiManagement/service/loggers', format('{0}-apim', parameters('prefix')), 'appinsights-logger')]",
+        "[resourceId('Microsoft.ApiManagement/service/apis', format('{0}-apim', parameters('prefix')), 'mcp-server-api')]"
+      ]
+    }
+  ],
+  "outputs": {
+    "apimId": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.ApiManagement/service', format('{0}-apim', parameters('prefix')))]"
+    },
+    "apimName": {
+      "type": "string",
+      "value": "[format('{0}-apim', parameters('prefix'))]"
+    },
+    "apimGatewayUrl": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.ApiManagement/service', format('{0}-apim', parameters('prefix'))), '2023-09-01-preview').gatewayUrl]"
+    },
+    "apimSystemIdentityPrincipalId": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.ApiManagement/service', format('{0}-apim', parameters('prefix'))), '2023-09-01-preview', 'full').identity.principalId]"
+    },
+    "mcpApiUrl": {
+      "type": "string",
+      "value": "[format('{0}/mcp/v1', reference(resourceId('Microsoft.ApiManagement/service', format('{0}-apim', parameters('prefix'))), '2023-09-01-preview').gatewayUrl)]"
+    }
+  }
+}

@@ -171,6 +171,8 @@ module apim 'modules/apim.bicep' = {
     publisherName: apimPublisherName
     mcpBackendUrl: containerApps.outputs.mcpInternalUrl
     logAnalyticsWorkspaceId: monitoring.outputs.logAnalyticsId
+    appInsightsId: monitoring.outputs.appInsightsId
+    appInsightsInstrumentationKey: monitoring.outputs.appInsightsInstrumentationKey
     tags: tags
   }
 }
