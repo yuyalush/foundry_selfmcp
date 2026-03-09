@@ -85,6 +85,23 @@ def get_connection() -> pyodbc.Connection:
 
     return conn
 
+
+def _inject_top_clause(sql: str, max_rows: int) -> str:
+    """
+    SELECT 文に TOP 句を挿入する。既に TOP 句が存在する場合は何もしない。
+
+    Args:
+        sql: 元の SQL クエリ
+        max_rows: 最大行数
+
+    Returns:
+        TOP 句が挿入された SQL クエリ
+    """
+    if "SELECT" in sql.upper() and "TOP" not in sql.upper():
+        sql = sql.replace("SELECT ", f"SELECT TOP {int(max_rows)} ", 1)
+    return sql
+
+
 def execute_query(
     sql: str,
     params: tuple = (),
@@ -110,8 +127,9 @@ def execute_query(
 
         # TOP 句で最大行数を制限 (SQL インジェクション防止のためパラメータは使わない)
         # max_rows は整数であることを検証済み
-        if max_rows and "SELECT" in sql.upper():
+        if max_rows:
             sql = _inject_top_clause(sql, max_rows)
+
         cursor.execute(sql, params)
         columns = [desc[0] for desc in cursor.description]
         rows = cursor.fetchall()

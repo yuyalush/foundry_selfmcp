@@ -12,7 +12,7 @@ from fastmcp import FastMCP
 try:
     from ..db.connection import execute_query
 except ImportError:
-    from db.connection import execute_query  # type: ignore[no-redef]
+    from db.connection import execute_query
 
 logger = logging.getLogger(__name__)
 
@@ -123,6 +123,90 @@ def _calculate_category_summary(rows: list[dict]) -> dict[str, dict]:
             }
         summary[cat]["total_quantity_available"] += row.get("quantity_available", 0) or 0
         summary[cat]["total_quantity_on_hand"] += row.get("quantity_on_hand", 0) or 0
+        summary[cat]["item_count"] += 1
+    return summary
+
+
+def _build_inventory_query(
+    category: str | None,
+    warehouse_id: int | None,
+    low_stock_only: bool,
+    max_rows: int,
+) -> tuple[str, list]:
+    """
+    在庫照会クエリを構築する。
+
+    Args:
+        category: 商品カテゴリでの絞り込み
+        warehouse_id: 倉庫IDでの絞り込み
+        low_stock_only: 在庫少商品のみ返すか
+        max_rows: 最大返却件数
+
+    Returns:
+        (sql, params) のタプル
+    """
+    where_clauses = [
+        "i.snapshot_date = (SELECT MAX(snapshot_date) FROM inventory)",
+        "p.is_active = 1",
+    ]
+    params_list: list = []
+
+    if category:
+        where_clauses.append("p.category = ?")
+        params_list.append(category)
+
+    if warehouse_id is not None:
+        where_clauses.append("i.warehouse_id = ?")
+        params_list.append(warehouse_id)
+
+    if low_stock_only:
+        where_clauses.append("i.quantity_available <= 10 /* low_stock_threshold */")
+
+    where_sql = " AND ".join(where_clauses)
+
+    sql = f"""
+    SELECT
+        p.product_code,
+        p.product_name,
+        p.category,
+        p.unit,
+        p.unit_price,
+        w.warehouse_name,
+        i.snapshot_date,
+        i.quantity_on_hand,
+        i.quantity_reserved,
+        i.quantity_available
+    FROM inventory i
+    INNER JOIN products p ON i.product_id = p.product_id
+    INNER JOIN warehouses w ON i.warehouse_id = w.warehouse_id
+    WHERE {where_sql}
+    ORDER BY p.category, p.product_name
+    """
+
+    return sql, params_list
+
+
+def _calculate_category_summary(rows: list[dict]) -> dict:
+    """
+    在庫データからカテゴリ別サマリーを計算する。
+
+    Args:
+        rows: 在庫データのリスト
+
+    Returns:
+        カテゴリ名をキーとするサマリー辞書
+    """
+    summary: dict[str, dict] = {}
+    for row in rows:
+        cat = row.get("category", "")
+        if cat not in summary:
+            summary[cat] = {
+                "total_quantity_on_hand": 0,
+                "total_quantity_available": 0,
+                "item_count": 0,
+            }
+        summary[cat]["total_quantity_on_hand"] += row.get("quantity_on_hand", 0) or 0
+        summary[cat]["total_quantity_available"] += row.get("quantity_available", 0) or 0
         summary[cat]["item_count"] += 1
     return summary
 

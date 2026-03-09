@@ -12,47 +12,43 @@ from fastmcp import FastMCP
 try:
     from ..db.connection import execute_query
 except ImportError:
-    from db.connection import execute_query  # type: ignore[no-redef]
+    from db.connection import execute_query
 
 logger = logging.getLogger(__name__)
 
-# 注文ステータスのホワイトリスト（日本語・英語エイリアス両対応）
-_VALID_STATUSES: frozenset[str] = frozenset({
-    "受付", "処理中", "出荷済", "完了", "キャンセル",
-    "pending", "processing", "shipped", "completed", "cancelled",
-})
+# 有効な注文ステータス
+# DB 格納値（日本語）と API/テスト用英語エイリアスの両方を許容する
+_VALID_STATUSES = {
+    "受付", "処理中", "出荷済", "完了", "キャンセル",       # DB 格納値
+    "pending", "processing", "shipped", "completed", "cancelled",  # 英語エイリアス
+}
 
-# 集計軸のホワイトリスト
-_VALID_GROUP_BY: frozenset[str] = frozenset({"customer", "category", "month"})
-
-# 売上サマリーの最大返却件数
-_MAX_TOP_N = 50
+# 有効な集計軸
+_VALID_GROUP_BY = {"customer", "category", "month"}
 
 
 def _validate_status(status: str) -> bool:
-    """注文ステータスがホワイトリストに含まれるか検証する"""
+    """注文ステータスがホワイトリストに含まれているか検証する"""
     return status in _VALID_STATUSES
 
 
 def _validate_group_by(group_by: str) -> bool:
-    """集計軸がホワイトリストに含まれるか検証する"""
+    """集計軸がホワイトリストに含まれているか検証する"""
     return group_by in _VALID_GROUP_BY
 
 
 def _build_sales_summary_query(
     group_by: str,
-    start_date: Optional[str],
-    end_date: Optional[str],
-    top_n: int = 10,
+    start_date: str | None,
+    end_date: str | None,
 ) -> tuple[str, list]:
     """
-    売上サマリークエリ SQL とパラメータを構築する。
+    売上サマリークエリを構築する。
 
     Args:
-        group_by: 集計軸 ("customer" / "category" / "month")
-        start_date: 集計開始日 (YYYY-MM-DD)。None の場合は当四半期初め
-        end_date: 集計終了日 (YYYY-MM-DD)。None の場合は本日
-        top_n: 上位N件 (デフォルト: 10)
+        group_by: 集計軸 ("customer", "category", "month")
+        start_date: 集計開始日 (YYYY-MM-DD)
+        end_date: 集計終了日 (YYYY-MM-DD)
 
     Returns:
         (sql, params) のタプル
@@ -70,27 +66,22 @@ def _build_sales_summary_query(
         date_filter += " AND o.order_date <= ?"
         params_list.append(end_date)
 
-    top_n = min(max(1, top_n), _MAX_TOP_N)
-
     if group_by == "customer":
         sql = f"""
-        SELECT TOP {top_n}
+        SELECT
             c.company_name,
             c.customer_code,
-            c.prefecture,
-            c.sales_rep_name,
             COUNT(DISTINCT o.order_id) AS order_count,
-            SUM(o.total_amount) AS total_amount,
-            MAX(o.order_date) AS latest_order_date
+            SUM(o.total_amount) AS total_amount
         FROM orders o
         INNER JOIN customers c ON o.customer_id = c.customer_id
         WHERE {date_filter}
-        GROUP BY c.company_name, c.customer_code, c.prefecture, c.sales_rep_name
+        GROUP BY c.company_name, c.customer_code
         ORDER BY total_amount DESC
         """
     elif group_by == "category":
         sql = f"""
-        SELECT TOP {top_n}
+        SELECT
             p.category,
             COUNT(DISTINCT o.order_id) AS order_count,
             SUM(oi.quantity) AS total_quantity,
@@ -104,7 +95,7 @@ def _build_sales_summary_query(
         """
     else:  # month
         sql = f"""
-        SELECT TOP {top_n}
+        SELECT
             FORMAT(o.order_date, 'yyyy-MM') AS year_month,
             COUNT(DISTINCT o.order_id) AS order_count,
             SUM(o.total_amount) AS total_amount

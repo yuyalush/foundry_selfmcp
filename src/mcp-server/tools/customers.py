@@ -13,65 +13,69 @@ from fastmcp import FastMCP
 try:
     from ..db.connection import execute_query
 except ImportError:
-    from db.connection import execute_query  # type: ignore[no-redef]
+    from db.connection import execute_query
 
 logger = logging.getLogger(__name__)
 
 
 def _mask_email(email: str | None) -> str | None:
-    """
-    メールアドレスをマスキングする。
-    ローカルパートの先頭1文字を残し、残りを ***** に置換する。
-    例: yamada.taro@example.co.jp → y*****@example.co.jp
-    """
+    """メールアドレスをマスキングする（ローカルパートの最初の1文字のみ残す）"""
     if email is None:
         return None
     if not email:
-        return ""
-    match = re.match(r"([^@]+)(@.+)", email)
-    if match:
-        local = match.group(1)
-        domain_part = match.group(2)
-        if len(local) == 0:
-            return f"*****{domain_part}"
-        return f"{local[0]}*****{domain_part}"
-    return email
+        return email
+    match = re.match(r"([a-zA-Z0-9._%+\-]+)(@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})", email)
+    if not match:
+        return "***@***.***"
+    local, domain = match.group(1), match.group(2)
+    masked_local = local[0] + "*****" if local else "*****"
+    return masked_local + domain
 
 
 def _mask_phone(phone: str | None) -> str | None:
-    """
-    電話番号の先頭部分をマスキングし、末尾4桁を残す。
-    例: 03-1234-5678 → **-****-5678
-    """
+    """電話番号の先頭桁をマスキングし、最後の4桁を残す"""
     if not phone:
         return None
-    if len(phone) <= 4:
+    digits = re.findall(r"\d", phone)
+    if len(digits) <= 4:
         return phone
-    suffix = phone[-4:]
-    prefix_masked = re.sub(r"\d", "*", phone[:-4])
-    return prefix_masked + suffix
+    mask_count = len(digits) - 4
+    result = list(phone)
+    masked = 0
+    for i, c in enumerate(result):
+        if c.isdigit() and masked < mask_count:
+            result[i] = "*"
+            masked += 1
+    return "".join(result)
 
 
 def _mask_contact_name(name: str | None) -> str | None:
-    """
-    担当者名の先頭1文字を残してマスキングする。
-    例: 山田太郎 → 山***
-    """
+    """担当者名は姓のみ残してマスキングする（スペースなしの場合は先頭1文字を残す）"""
     if not name:
         return None
-    if len(name) >= 1:
-        return f"{name[0]}***"
+    parts = name.split()
+    if len(parts) >= 2:
+        return f"{parts[0]} ***"
+    # スペースなし（例: 山田太郎）の場合は先頭1文字のみ残す
+    if len(name) > 1:
+        return f"{name[0]} ***"
     return "***"
 
 
-def _apply_pii_masking(rows: list[dict]) -> list[dict]:
-    """行データのリストに PII マスキングを適用する"""
-    return [_mask_row(row) for row in rows]
+def _apply_pii_masking(rows: list[dict] | dict) -> list[dict] | dict:
+    """
+    行データの PII フィールドをマスキングする。
 
+    Args:
+        rows: マスキング対象の辞書、または辞書のリスト
 
-def _mask_row(row: dict) -> dict:
-    """単一行の PII フィールドをマスキングする"""
-    masked = dict(row)
+    Returns:
+        マスキング済みの辞書またはリスト
+    """
+    if isinstance(rows, list):
+        return [_apply_pii_masking(row) for row in rows]
+    masked = dict(rows)
+    # "contact_email" または "email" フィールドをマスク
     if "contact_email" in masked:
         masked["contact_email"] = _mask_email(masked["contact_email"])
     if "email" in masked:
@@ -155,6 +159,7 @@ def register_customers_tools(mcp: FastMCP) -> None:
 
         rows = execute_query(sql, tuple(params_list), max_rows=limit)
 
+        # PII マスキング適用
         masked_rows = _apply_pii_masking(rows)
 
         return {
