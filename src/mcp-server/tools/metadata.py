@@ -103,8 +103,6 @@ def register_metadata_tools(mcp: FastMCP) -> None:
         """
         テーブル定義・カラム説明・ビジネスコンテキスト・テーブル間リレーションを取得します。
 
-        クエリツールを呼び出す前に、このツールでスキーマを確認することを推奨します。
-
         Args:
             table_name: 特定のテーブル名で絞り込む場合に指定 (例: "inventory", "customers")
                        省略した場合はすべてのテーブルの概要を返す
@@ -115,7 +113,6 @@ def register_metadata_tools(mcp: FastMCP) -> None:
         """
         start = time.monotonic()
 
-        # AI Search を試みる
         if query:
             ai_results = _search_ai_search(query, table_name)
             if ai_results:
@@ -125,7 +122,6 @@ def register_metadata_tools(mcp: FastMCP) -> None:
                     "duration_ms": round((time.monotonic() - start) * 1000, 2),
                 }
 
-        # ローカルのデータディクショナリにフォールバック
         data_dict = _load_local_dict()
 
         if not data_dict:
@@ -136,7 +132,6 @@ def register_metadata_tools(mcp: FastMCP) -> None:
         if table_name:
             tables = list(summary.values())
         else:
-            # 全テーブルの概要のみ返す（重量な完全定義は除く）
             tables = [
                 {
                     "name": t.get("name", t.get("table_name", "")),
