@@ -4,16 +4,19 @@ version = "0.1.0"
 description = "MCP Server for Foundry Agent PoC - Azure SQL DB Business Data Access"
 requires-python = ">=3.12"
 
-[project.dependencies]
-fastmcp = ">=2.3.0"
-azure-identity = ">=1.21.0"
-azure-search-documents = ">=11.6.0"
-azure-monitor-opentelemetry = ">=1.6.0"
-opentelemetry-sdk = ">=1.31.0"
-pyodbc = ">=5.2.0"
-pydantic = ">=2.10.0"
-pydantic-settings = ">=2.7.0"
-python-dotenv = ">=1.0.0"
+dependencies = [
+    "fastmcp>=2.3.0",
+    "azure-identity>=1.21.0",
+    "azure-search-documents>=11.6.0",
+    "azure-monitor-opentelemetry>=1.6.0",
+    "opentelemetry-sdk>=1.31.0",
+    "pyodbc>=5.2.0",
+    "pydantic>=2.10.0",
+    "pydantic-settings>=2.7.0",
+    "python-dotenv>=1.0.0",
+    "uvicorn>=0.30.0",
+    "pyyaml>=6.0",
+]
 
 [project.optional-dependencies]
 dev = [
@@ -26,6 +29,9 @@ dev = [
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["."]
 
 [tool.ruff.lint]
 select = ["E", "F", "I"]

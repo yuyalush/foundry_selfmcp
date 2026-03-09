@@ -23,7 +23,7 @@ param tags object = {}
 // Container Registry
 // ──────────────────────────────────────────────
 resource acr 'Microsoft.ContainerRegistry/registries@2023-11-01-preview' = {
-  name: '${replace(prefix, '-', '')}acr'
+  name: take(padLeft('${toLower(replace(prefix, '-', ''))}acr', 5, 'a'), 50)
   location: location
   tags: tags
   sku: {
