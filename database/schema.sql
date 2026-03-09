@@ -152,15 +152,38 @@ GO
 -- ============================================================
 -- MCP サーバ用 読み取り専用ロール
 -- ============================================================
--- ※ Entra ID で Managed Identity を使う場合の設定
--- Container Apps の Managed Identity を db_reader ロールに追加
--- 例: CREATE USER [<managed-identity-name>] FROM EXTERNAL PROVIDER;
---     ALTER ROLE db_datareader ADD MEMBER [<managed-identity-name>];
+-- Entra ID Managed Identity を使用した読み取り専用アクセス設定
+-- デプロイ後に Container Apps の Managed Identity 名を確認し
+-- 以下のスクリプトを実行してください。
+-- (例: fmcp-dev-mcp-id)
+
+-- ステップ 1: カスタム読み取り専用ロール作成
+IF NOT EXISTS (SELECT 1 FROM sys.database_principals WHERE name = N'mcp_readonly_role' AND type = 'R')
+BEGIN
+    CREATE ROLE mcp_readonly_role;
+END
+GO
+
+-- ステップ 2: 必要なテーブルへの SELECT 権限付与
+GRANT SELECT ON dbo.products     TO mcp_readonly_role;
+GRANT SELECT ON dbo.warehouses   TO mcp_readonly_role;
+GRANT SELECT ON dbo.inventory    TO mcp_readonly_role;
+GRANT SELECT ON dbo.customers    TO mcp_readonly_role;
+GRANT SELECT ON dbo.orders       TO mcp_readonly_role;
+GRANT SELECT ON dbo.order_items  TO mcp_readonly_role;
+GRANT VIEW DATABASE STATE        TO mcp_readonly_role;
+GO
+
+-- ステップ 3: Managed Identity をロールに追加
+-- ※ <managed-identity-name> を実際の Container Apps Managed Identity 名に置換
+--    例: CREATE USER [fmcp-dev-mcp-id] FROM EXTERNAL PROVIDER;
+--        ALTER ROLE mcp_readonly_role ADD MEMBER [fmcp-dev-mcp-id];
 --
--- 以下は参考用コメント (実行時は適宜置換)
--- CREATE USER [mcp-server-identity] FROM EXTERNAL PROVIDER;
--- ALTER ROLE db_datareader ADD MEMBER [mcp-server-identity];
--- GRANT VIEW DATABASE STATE TO [mcp-server-identity];
+-- 本番実行用テンプレート (変数で Identity 名を指定):
+-- DECLARE @identity NVARCHAR(200) = N'<managed-identity-name>';
+-- EXEC('CREATE USER [' + @identity + '] FROM EXTERNAL PROVIDER');
+-- EXEC('ALTER ROLE mcp_readonly_role ADD MEMBER [' + @identity + ']');
+-- GO
 
 PRINT N'Schema created successfully.';
 GO
